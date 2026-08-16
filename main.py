@@ -24,7 +24,9 @@ class Document(Base):
     embedding = Column(Vector(DIMENSIONS))
 
 # --- INICJALIZACJA FASTAPI ---
-app = FastAPI(title="FastAPI + PostgreSQL pgvector Docker", version="1.0.0")
+# Zmień tę linię na początku pliku main.py:
+app = FastAPI(title="FastAPI + PostgreSQL pgvector Docker", version="1.0.0", redirect_slashes=True)
+
 
 @app.on_event("startup")
 def startup_event():
