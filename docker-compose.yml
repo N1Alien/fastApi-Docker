@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Łączymy się z hostem 'db' (nazwa serwisu poniżej), port wewnętrzny to zawsze 5432
+      - DATABASE_URL=postgresql://app_user:app_password@db:5432/app_db
+    volumes:
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - db
+
+  db:
+    # Zmiana: Oficjalny obraz zawierający rozszerzenie pgvector
+    image: pgvector/pgvector:pg15
+    environment:
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=app_password
+      - POSTGRES_DB=app_db
+    ports:
+      - "5434:5432" # Pozwala na ewentualne połączenie z bazy na Twoim komputerze przez port 5434
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
