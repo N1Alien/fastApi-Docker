@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.2", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.3", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -73,6 +73,7 @@ async def upload_pdf(file: UploadFile = File(...)):
                     contents=chunk,
                     config=types.EmbedContentConfig(output_dimensionality=1536)
                 )
+                # FIX: Pobieramy values z PIERWSZEGO elementu listy embeddings za pomocą indeku 
                 vector_values = embed_result.embeddings.values
                 vector_str = str(vector_values)
                 
@@ -95,6 +96,7 @@ async def smart_rag_generator(prompt: str):
             contents=prompt,
             config=types.EmbedContentConfig(output_dimensionality=1536)
         )
+        # FIX: Pobieramy values z PIERWSZEGO elementu listy embeddings za pomocą indeksu 
         query_vector_str = str(query_embed.embeddings.values)
         
         session = SessionLocal()
@@ -105,8 +107,7 @@ async def smart_rag_generator(prompt: str):
         session.close()
         
         if db_results:
-            # FIX: Wyciągamy surowy tekst z zerowego indeksu krotki (row[0]) zamiast przekazywać cały obiekt Row
-            context = "\n---\n".join([row[0] for row in db_results])
+            context = "\n---\n".join([row for row in db_results])
         else:
             context = "No matching documents found in the database."
             
@@ -114,8 +115,8 @@ async def smart_rag_generator(prompt: str):
             model='gemini-3.6-flash',
             contents=(
                 f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
-                f"If the question relates to this knowledge, use it to provide a highly accurate answer. "
-                f"Otherwise, answer based on your own general knowledge.\n\n"
+                f"If the question relates to this knowledge, use it. Otherwise, answer "
+                f"based on your own general knowledge.\n\n"
                 f"User question: {prompt}"
             ),
         )
