@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.8.0", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -59,7 +59,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-            # ZMIANA: Dopasowujemy definicję tabeli do Twoich 1536 wymiarów w bazie
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
@@ -69,13 +68,12 @@ async def upload_pdf(file: UploadFile = File(...)):
             """))
             
             for chunk in chunks:
-                # ZMIANA: Wymuszamy wygenerowanie wektora o rozmiarze 1536, aby pasował do bazy
                 embed_result = client.models.embed_content(
                     model="gemini-embedding-2",
                     contents=chunk,
                     config=types.EmbedContentConfig(output_dimensionality=1536)
                 )
-                vector_values = embed_result.embeddings[0].values
+                vector_values = embed_result.embeddings.values
                 vector_str = str(vector_values)
                 
                 conn.execute(
@@ -92,23 +90,23 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def smart_rag_generator(prompt: str):
     """Searches for context using pgvector and generates streaming response via Gemini."""
     try:
-        # ZMIANA: Wymuszamy wygenerowanie wektora o rozmiarze 1536 dla pytania
         query_embed = client.models.embed_content(
             model="gemini-embedding-2",
             contents=prompt,
             config=types.EmbedContentConfig(output_dimensionality=1536)
         )
-        query_vector_str = str(query_embed.embeddings[0].values)
+        query_vector_str = str(query_embed.embeddings.values)
         
         session = SessionLocal()
+        # Zwiększony limit z 3 na 6, aby pobierać więcej fragmentów z bazy wektorowej
         db_results = session.execute(
-            text("SELECT content FROM documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 3;"),
+            text("SELECT content FROM documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 6;"),
             {"qvec": query_vector_str}
         ).fetchall()
         session.close()
         
         if db_results:
-            context = "\n---\n".join([row[0] for row in db_results])
+            context = "\n---\n".join([row for row in db_results])
         else:
             context = "No matching documents found in the database."
             
@@ -116,14 +114,11 @@ async def smart_rag_generator(prompt: str):
             model='gemini-3.6-flash',
             contents=(
                 f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
-                f"Your task is to answer the user question. "
-                f"CRITICAL RULE: You MUST explicitly state in your answer if you are using the provided PDF chunks "
-                f"or your general knowledge. If you use the PDF chunks, append a section '[Source Code/Quote]' "
-                f"at the end of your response, quoting the exact sentence from the context that helped you answer.\n\n"
+                f"If the question relates to this knowledge, use it. Otherwise, answer "
+                f"based on your own general knowledge.\n\n"
                 f"User question: {prompt}"
             ),
         )
-
         
         if hasattr(response, 'text') and response.text:
             yield response.text
