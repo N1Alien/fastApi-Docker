@@ -1,97 +1,57 @@
 import os
-import numpy as np
-from fastapi import FastAPI, Path, Query, HTTPException
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, Text, select, text
-from sqlalchemy.orm import declarative_base, sessionmaker
-from pgvector.sqlalchemy import Vector
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from huggingface_hub import AsyncInferenceClient
 
-# --- KONFIGURACJA BAZY DANYCH (SQLAlchemy + pgvector) ---
-# Pobieramy zmienną środowiskową ustawioną w docker-compose.yml
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://app_user:app_password@localhost:5434/app_db")
-
+# 1. Baza danych z Rendera
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
 
-DIMENSIONS = 1536  # Wymiar wektorów OpenAI
+# 2. Klient Hugging Face (token z ustawień profilu)
+HF_TOKEN = os.getenv("HF_TOKEN")
+# Używamy popularnego, darmowego modelu hostowanego na serverless API Hugging Face
+HF_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
+hf_client = AsyncInferenceClient(model=HF_MODEL, token=HF_TOKEN)
 
-class Document(Base):
-    __tablename__ = 'documents'
-    
-    id = Column(Integer, primary_key=True)
-    content = Column(Text, nullable=False)
-    embedding = Column(Vector(DIMENSIONS))
+app = FastAPI(title="Hugging Face RAG Stream w Chmurze", version="1.0.0", redirect_slashes=True)
 
-# --- INICJALIZACJA FASTAPI ---
-# Zmień tę linię na początku pliku main.py:
-app = FastAPI(title="FastAPI + PostgreSQL pgvector Docker", version="1.0.0", redirect_slashes=True)
+class PytanieRequest(BaseModel):
+    prompt: str
 
-
-@app.on_event("startup")
-def startup_event():
-    """Uruchamia się automatycznie przy starcie kontenera FastAPI."""
-    with engine.connect() as conn:
-        # Włączamy wtyczkę wektorową w bazie danych
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-        conn.commit()
-    # Tworzymy tabele, jeśli nie istnieją
-    Base.metadata.create_all(engine)
-    
-    # Opcjonalnie: Dodajemy przykładowe dane na start, jeśli baza jest pusta
-    session = SessionLocal()
-    if session.query(Document).count() == 0:
-        def generate_mock_embedding():
-            vec = np.random.randn(DIMENSIONS)
-            return (vec / np.linalg.norm(vec)).tolist()
-        
-        doc1 = Document(content="Sztuczna inteligencja i uczenie maszynowe w chmurze.", embedding=generate_mock_embedding())
-        doc2 = Document(content="Przepisy na szybki i smaczny obiad wegetariański.", embedding=generate_mock_embedding())
-        session.add_all([doc1, doc2])
-        session.commit()
-    session.close()
-
-# --- MODELE WALIDACJI (Pydantic) ---
-class Uzytkownik(BaseModel):
-    imie: str = Field(min_length=2, max_length=50)
-    email: str
-
-# --- ENDPOINTY ---
-
-@app.post("/uzytkownicy/")
-def utworz_uzytkownika(user: Uzytkownik):
-    return {"status": "sukces", "dane": user}
-
-@app.get("/uzytkownicy/{user_id}")
-def pobierz_uzytkownika(user_id: int = Path(gt=0)):
-    return {"user_id": user_id, "imie": "Jan Kowalski", "siec": "docker-ok"}
-
-@app.get("/szukaj/")
-def szukaj(q: str = Query(..., min_length=3), limit: int = Query(default=10, ge=1, le=100)):
-    return {"szukana_fraza": q, "limit": limit, "status_bazy": "polaczony_w_sieci"}
-
-@app.post("/szukaj-wektorem/")
-def szukaj_wektorem():
-    """Generuje losowy wektor zapytania i szuka najbliższego sąsiada w bazie za pomocą pgvector."""
-    session = SessionLocal()
+async def hf_rag_generator(prompt: str):
+    """Pobiera kontekst z pgvector i strumieniuje tekst z Hugging Face."""
     try:
-        # Generujemy losowy wektor wyszukiwania
-        query_vec = np.random.randn(DIMENSIONS)
-        query_embedding = (query_vec / np.linalg.norm(query_vec)).tolist()
+        session = SessionLocal()
+        wynik_bazy = session.execute(text("SELECT content FROM documents LIMIT 1;")).fetchone()
+        session.close()
+        
+        kontekst = wynik_bazy if wynik_bazy else "Brak dodatkowego kontekstu."
+        
+        pelny_prompt = f"Kontekst: {kontekst}\n\nPytanie: {prompt}"
 
-        # Szukamy rekordów używając podobieństwa cosinusowego (1 - odległość_cosinusowa)
-        stmt = (
-            select(Document.content, (1 - Document.embedding.cosine_distance(query_embedding)).label("similarity"))
-            .order_by(Document.embedding.cosine_distance(query_embedding))
-            .limit(2)
+        # Asynchroniczne strumieniowanie z Hugging Face Serverless API
+        stream = await hf_client.text_generation(
+            prompt=pelny_prompt,
+            stream=True,
+            max_new_tokens=512
         )
         
-        results = session.execute(stmt).all()
-        
-        wyniki = [{"tresc": row.content, "podobienstwo": round(row.similarity, 4)} for row in results]
-        return {"status": "sukces", "wyniki": wyniki}
-        
+        async for chunk in stream:
+            yield chunk
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        session.close()
+        yield f"\n[Błąd Hugging Face: {str(e)}]"
+
+@app.post("/rag-hf-stream")
+async def rag_hf_stream(dane: PytanieRequest):
+    if not HF_TOKEN:
+        raise HTTPException(status_code=500, detail="Brak zmiennej środowiskowej HF_TOKEN.")
+        
+    return StreamingResponse(
+        hf_rag_generator(prompt=dane.prompt),
+        media_type="text/plain; charset=utf-8"
+    )
