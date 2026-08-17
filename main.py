@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-import google.generativeai as genai
+from google import genai
 from pypdf import PdfReader
 
 # --- 1. Konfiguracja bazy danych (PostgreSQL + pgvector z Rendera) ---
@@ -13,12 +13,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
-# --- 2. Konfiguracja oficjalnego SDK Google Gemini ---
+# --- 2. Konfiguracja nowoczesnego SDK Google GenAI ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG z PDF i pgvector w Chmurze", version="2.0.0", redirect_slashes=True)
+app = FastAPI(title="RAG z PDF i pgvector w Chmurze", version="2.1.0", redirect_slashes=True)
 
 class PytanieRequest(BaseModel):
     prompt: str
@@ -42,7 +41,6 @@ async def wczytaj_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Brak klucza GEMINI_API_KEY.")
         
     try:
-        # Odczyt zawartości pliku PDF w pamięci RAM
         pdf_bytes = await file.read()
         pdf_stream = io.BytesIO(pdf_bytes)
         reader = PdfReader(pdf_stream)
@@ -56,28 +54,25 @@ async def wczytaj_pdf(file: UploadFile = File(...)):
         if not pelny_tekst.strip():
             raise HTTPException(status_code=400, detail="Nie udało się odczytać tekstu z tego pliku PDF.")
             
-        # Podział tekstu na mniejsze kawałki (chunky)
         chunky = podziel_tekst(pelny_tekst)
         
-        # Inicjalizacja modelu embeddingów od Google
-        # Zapis do bazy danych PostgreSQL z pgvector
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
                     content TEXT NOT NULL,
-                    embedding vector(3072)
+                    embedding vector(768)
                 );
             """))
             
             for chunk in chunky:
-                # Generowanie embeddingu przez Google SDK
-                embed_result = genai.embed_content(
-                    model="models/text-embedding-004",
-                    content=chunk
+                # Nowoczesne generowanie embeddingu przez Google GenAI SDK (model text-embedding-004 ma 768 wymiarów)
+                embed_result = client.models.embed_content(
+                    model="text-embedding-004",
+                    contents=chunk
                 )
-                wektor = embed_result["embedding"]
+                wektor = embed_result.embeddings.values
                 wektor_str = str(wektor)
                 
                 conn.execute(
@@ -94,14 +89,13 @@ async def wczytaj_pdf(file: UploadFile = File(...)):
 async def smart_rag_generator(prompt: str):
     """Wyszukuje pasujący fragment przez wektory w pgvector i generuje odpowiedź z Gemini."""
     try:
-        # Krok A: Generowanie wektora dla pytania użytkownika
-        query_embed = genai.embed_content(
-            model="models/text-embedding-004",
-            content=prompt
+        # Generowanie wektora dla pytania (768 wymiarów)
+        query_embed = client.models.embed_content(
+            model="text-embedding-004",
+            contents=prompt
         )
-        query_vector_str = str(query_embed["embedding"])
+        query_vector_str = str(query_embed.embeddings.values)
         
-        # Krok B: Wyszukiwanie pasujących fragmentów (similarity search przez operator <=>)
         session = SessionLocal()
         wyniki = session.execute(
             text("SELECT content FROM documents ORDER BY embedding <=> :qvec::vector LIMIT 3;"),
@@ -110,28 +104,31 @@ async def smart_rag_generator(prompt: str):
         session.close()
         
         if wyniki:
-            kontekst = "\n---\n".join([row[0] for row in wyniki])
+            kontekst = "\n---\n".join([row for row in wyniki])
         else:
             kontekst = "Brak pasujących dokumentów w bazie."
             
-        # Krok C: Przekazanie kontekstu i promptu do modelu Gemini 3.6 Flash
-        model = genai.GenerativeModel('gemini-3.6-flash')
-        pelny_prompt = (
-            f"Jesteś inteligentnym asystentem. Masz dostęp do bazy wiedzy (fragmentów PDF):\n'{kontekst}'.\n\n"
-            f"Jeśli pytanie dotyczy tej wiedzy, wykorzystaj ją. W przeciwnym wypadku odpowiedz "
-            f"na podstawie własnej wiedzy ogólnej.\n\n"
-            f"Pytanie użytkownika: {prompt}"
+        # Generowanie odpowiedzi przez model gemini-3.6-flash z nowym SDK
+        response = client.models.generate_content(
+            model='gemini-3.6-flash',
+            contents=(
+                f"Jesteś inteligentnym asystentem. Masz dostęp do bazy wiedzy (fragmentów PDF):\n'{kontekst}'.\n\n"
+                f"Jeśli pytanie dotyczy tej wiedzy, wykorzystaj ją. W przeciwnym wypadku odpowiedz "
+                f"na podstawie własnej wiedzy ogólnej.\n\n"
+                f"Pytanie użytkownika: {prompt}"
+            ),
         )
         
-        response = model.generate_content(pelny_prompt, stream=True)
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        # Obsługa streamu z nowego SDK
+        if hasattr(response, 'text'):
+            yield response.text
+        else:
+            yield str(response)
 
     except Exception as e:
         yield f"\n[Błąd chmurowego RAG: {str(e)}]"
 
-# --- 5. Główny endpoint czatu (zmieniona nazwa z rag-hf-stream) ---
+# --- 5. Główny endpoint czatu ---
 @app.post("/chat-z-modelem")
 async def chat_z_modelem(dane: PytanieRequest):
     """Płynny czat z modelem AI wzbogacony o wyszukiwanie w bazie wektorowej."""
