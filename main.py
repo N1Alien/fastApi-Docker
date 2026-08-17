@@ -39,10 +39,12 @@ async def full_rag_generator(prompt: str):
         model = genai.GenerativeModel('gemini-3.6-flash')
         
         pelny_prompt = (
-            f"Jesteś pomocnym asystentem RAG. Odpowiadaj wyłącznie na podstawie poniższego kontekstu.\n\n"
-            f"Kontekst z bazy danych: {kontekst}\n\n"
-            f"Pytanie użytkownika: {prompt}"
-        )
+    f"Jesteś pomocnym asystentem RAG. Wykorzystaj poniższy kontekst jako dodatkową wiedzę, "
+    f"ale jeśli nie ma tam odpowiedzi, odpowiedz najlepiej jak potrafisz na podstawie własnej wiedzy.\n\n"
+    f"Kontekst z bazy danych: {kontekst}\n\n"
+    f"Pytanie użytkownika: {prompt}"
+)
+
 
         # Krok C: Strumieniowanie przez SDK Google
         response = model.generate_content(pelny_prompt, stream=True)
