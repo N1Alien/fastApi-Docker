@@ -31,12 +31,12 @@ async def full_rag_generator(prompt: str):
         
         kontekst = wynik_bazy if wynik_bazy else "Brak dodatkowego kontekstu w bazie danych."
 
-        # Krok B: Sprawdzenie klucza i inicjalizacja modelu
+        # Krok B: Sprawdzenie klucza i inicjalizacja nowego modelu 2.5
         if not GEMINI_API_KEY:
             yield "[Błąd: Brak klucza GEMINI_API_KEY]"
             return
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         pelny_prompt = (
             f"Jesteś pomocnym asystentem RAG. Odpowiadaj wyłącznie na podstawie poniższego kontekstu.\n\n"
@@ -44,7 +44,7 @@ async def full_rag_generator(prompt: str):
             f"Pytanie użytkownika: {prompt}"
         )
 
-        # Krok C: Bezpieczne strumieniowanie przez natywne SDK Google
+        # Krok C: Strumieniowanie przez SDK Google
         response = model.generate_content(pelny_prompt, stream=True)
         
         for chunk in response:
@@ -56,7 +56,7 @@ async def full_rag_generator(prompt: str):
 
 @app.post("/rag-hf-stream")
 async def rag_hf_stream(dane: PytanieRequest):
-    """Główny endpoint łączący wczorajszą bazę pgvector z dzisiejszym stabilnym Gemini."""
+    """Główny endpoint łączący wczorajszą bazę pgvector z nowym Gemini 2.5."""
     return StreamingResponse(
         full_rag_generator(prompt=dane.prompt),
         media_type="text/plain; charset=utf-8"
