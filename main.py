@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.3", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.4", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -73,8 +73,8 @@ async def upload_pdf(file: UploadFile = File(...)):
                     contents=chunk,
                     config=types.EmbedContentConfig(output_dimensionality=1536)
                 )
-                # FIX: Pobieramy values z PIERWSZEGO elementu listy embeddings za pomocą indeku 
-                vector_values = embed_result.embeddings.values
+                # NAPRAWIONE: Używamy [0] bo embeddings to lista
+                vector_values = embed_result.embeddings[0].values
                 vector_str = str(vector_values)
                 
                 conn.execute(
@@ -96,8 +96,8 @@ async def smart_rag_generator(prompt: str):
             contents=prompt,
             config=types.EmbedContentConfig(output_dimensionality=1536)
         )
-        # FIX: Pobieramy values z PIERWSZEGO elementu listy embeddings za pomocą indeksu 
-        query_vector_str = str(query_embed.embeddings.values)
+        # NAPRAWIONE: Używamy [0] bo embeddings to lista
+        query_vector_str = str(query_embed.embeddings[0].values)
         
         session = SessionLocal()
         db_results = session.execute(
@@ -107,7 +107,7 @@ async def smart_rag_generator(prompt: str):
         session.close()
         
         if db_results:
-            context = "\n---\n".join([row for row in db_results])
+            context = "\n---\n".join([row[0] for row in db_results])
         else:
             context = "No matching documents found in the database."
             
