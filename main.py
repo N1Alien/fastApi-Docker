@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from google import genai
-from google.genai import types
+from google.genai import types  # Potrzebne do konfiguracji wymiarowości wektora
 from pypdf import PdfReader
 
 # --- 1. DATABASE CONFIGURATION ---
@@ -16,10 +16,9 @@ SessionLocal = sessionmaker(bind=engine)
 
 # --- 2. GOOGLE GENAI SDK CONFIGURATION ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Używamy standardowej konfiguracji klienta
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.4.0", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.5.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -60,22 +59,24 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-            # ZMIANA: Model gemini-embedding-001 generuje wektory o wymiarowości 3072
+            # Wymuszamy 768 wymiarów dla pełnej stabilności i zgodności z pgvector
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
                     content TEXT NOT NULL,
-                    embedding vector(3072)
+                    embedding vector(768)
                 );
             """))
             
             for chunk in chunks:
-                # ZMIANA: Używamy aktualnego, wspieranego modelu wektorowego
+                # Wywołanie najnowszego modelu z konfiguracją wymiarowości 768
                 embed_result = client.models.embed_content(
-                    model="gemini-embedding-001",
-                    contents=chunk
+                    model="gemini-embedding-2",
+                    contents=chunk,
+                    config=types.EmbedContentConfig(output_dimensionality=768)
                 )
-                vector_values = embed_result.embeddings.values
+                # POPRAWKA: Pobieramy values z pierwszego elementu listy embeddings
+                vector_values = embed_result.embeddings[0].values
                 vector_str = str(vector_values)
                 
                 conn.execute(
@@ -92,12 +93,14 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def smart_rag_generator(prompt: str):
     """Searches for context using pgvector and generates streaming response via Gemini."""
     try:
-        # ZMIANA: Używamy aktualnego modelu wektorowego do zamiany pytania na wektor
+        # Wywołanie najnowszego modelu z konfiguracją wymiarowości 768 dla pytania
         query_embed = client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=prompt
+            model="gemini-embedding-2",
+            contents=prompt,
+            config=types.EmbedContentConfig(output_dimensionality=768)
         )
-        query_vector_str = str(query_embed.embeddings.values)
+        # POPRAWKA: Pobieramy values z pierwszego elementu listy embeddings
+        query_vector_str = str(query_embed.embeddings[0].values)
         
         session = SessionLocal()
         db_results = session.execute(
