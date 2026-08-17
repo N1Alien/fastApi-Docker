@@ -7,3 +7,4 @@ pgvector
 numpy
 google-genai
 pypdf
+python-multipart
