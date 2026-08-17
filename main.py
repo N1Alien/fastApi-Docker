@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.6.0", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.7.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -73,10 +73,10 @@ async def upload_pdf(file: UploadFile = File(...)):
                     contents=chunk,
                     config=types.EmbedContentConfig(output_dimensionality=768)
                 )
-                vector_values = embed_result.embeddings.values
+                # POPRAWKA: Pobieramy values z PIERWSZEGO elementu listy za pomocą [0]
+                vector_values = embed_result.embeddings[0].values
                 vector_str = str(vector_values)
                 
-                # POPRAWKA: Zamiana ':embedding::vector' na 'CAST(:embedding AS vector)'
                 conn.execute(
                     text("INSERT INTO documents (content, embedding) VALUES (:content, CAST(:embedding AS vector))"),
                     {"content": chunk, "embedding": vector_str}
@@ -96,10 +96,10 @@ async def smart_rag_generator(prompt: str):
             contents=prompt,
             config=types.EmbedContentConfig(output_dimensionality=768)
         )
-        query_vector_str = str(query_embed.embeddings.values)
+        # POPRAWKA: Pobieramy values z PIERWSZEGO elementu listy za pomocą [0]
+        query_vector_str = str(query_embed.embeddings[0].values)
         
         session = SessionLocal()
-        # POPRAWKA: Zamiana ':qvec::vector' na 'CAST(:qvec AS vector)'
         db_results = session.execute(
             text("SELECT content FROM documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 3;"),
             {"qvec": query_vector_str}
@@ -107,7 +107,7 @@ async def smart_rag_generator(prompt: str):
         session.close()
         
         if db_results:
-            # db_results zwraca krotki (tuple), wyciągamy z nich tekst [0]
+            # Wyciągamy czysty tekst z krotek zwracanych przez bazę danych
             context = "\n---\n".join([row[0] for row in db_results])
         else:
             context = "No matching documents found in the database."
