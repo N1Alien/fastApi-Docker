@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import google.generativeai as genai
 
-# --- 1. wczorajsza baza danych (PostgreSQL + pgvector z Rendera) ---
+# --- 1. Wczorajsza baza danych (PostgreSQL + pgvector z Rendera) ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -31,12 +31,12 @@ async def full_rag_generator(prompt: str):
         
         kontekst = wynik_bazy if wynik_bazy else "Brak dodatkowego kontekstu w bazie danych."
 
-        # Krok B: Sprawdzenie klucza i inicjalizacja nowego modelu 2.5
+        # Krok B: Sprawdzenie klucza i inicjalizacja modelu Gemini 3.6 Flash
         if not GEMINI_API_KEY:
             yield "[Błąd: Brak klucza GEMINI_API_KEY]"
             return
 
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-3.6-flash')
         
         pelny_prompt = (
             f"Jesteś pomocnym asystentem RAG. Odpowiadaj wyłącznie na podstawie poniższego kontekstu.\n\n"
@@ -56,7 +56,7 @@ async def full_rag_generator(prompt: str):
 
 @app.post("/rag-hf-stream")
 async def rag_hf_stream(dane: PytanieRequest):
-    """Główny endpoint łączący wczorajszą bazę pgvector z nowym Gemini 2.5."""
+    """Główny endpoint łączący wczorajszą bazę pgvector z nowym Gemini 3.6."""
     return StreamingResponse(
         full_rag_generator(prompt=dane.prompt),
         media_type="text/plain; charset=utf-8"
