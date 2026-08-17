@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from duckduckgo_search import AsyncDDGS
+from duckduckgo_search import DDGS  # Zmiana: Importujemy uniwersalną klasę DDGS
 
 # --- 1. KONFIGURACJA BAZY DANYCH (PostgreSQL z Rendera) ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -16,7 +16,7 @@ app = FastAPI(title="Stabilny Darmowy RAG w Chmurze", version="1.0.0", redirect_
 class PytanieRequest(BaseModel):
     prompt: str
 
-# --- 2. ASYNCHRONICZNY GENERATOR DUCKDUCKGO ---
+# --- 2. ZAKTUALIZOWANY ASYNCHRONICZNY GENERATOR ---
 async def ddg_rag_generator(prompt: str):
     try:
         # Krok A: Pobranie wiedzy z bazy danych pgvector
@@ -24,7 +24,7 @@ async def ddg_rag_generator(prompt: str):
         wynik_bazy = session.execute(text("SELECT content FROM documents LIMIT 1;")).fetchone()
         session.close()
         
-        kontekst = wynik_bazy[0] if wynik_bazy else "Brak dodatkowego kontekstu w bazie danych."
+        kontekst = wynik_bazy if wynik_bazy else "Brak dodatkowego kontekstu w bazie danych."
         
         # Krok B: Budowanie pełnego zapytania tekstowego
         pelny_prompt = (
@@ -32,14 +32,13 @@ async def ddg_rag_generator(prompt: str):
             f"Pytanie użytkownika: {prompt}"
         )
         
-        # Krok C: Asynchroniczne odpytanie darmowego API DuckDuckGo (model Llama 3)
-        async with AsyncDDGS() as ddgs:
-            # Parametr model="llama-3-70b" daje nam dostęp do potężnego i darmowego LLM
+        # Krok C: Asynchroniczne wywołanie nowej klasy DDGS
+        async with DDGS() as ddgs:
+            # Metoda achat została zastąpiona asynchronicznym wywołaniem .achat() bezpośrednio na obiekcie DDGS
             response = await ddgs.achat(keywords=pelny_prompt, model="llama-3-70b")
             
             if response:
-                # Ponieważ darmowe API DDG zwraca odpowiedź w jednym bloku tekstowym,
-                # przekazujemy ją do streamu w całości lub dzieląc na słowa
+                # Rozdzielamy tekst na słowa, aby zasymulować efekt płynnego strumieniowania
                 for slowo in response.split(" "):
                     yield slowo + " "
             else:
