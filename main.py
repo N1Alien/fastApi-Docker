@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from duckduckgo_search import DDGS  # Zmiana: Importujemy uniwersalną klasę DDGS
+from duckduckgo_search import DDGS  # Uniwersalna klasa do obsługi darmowego AI
 
 # --- 1. KONFIGURACJA BAZY DANYCH (PostgreSQL z Rendera) ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -16,7 +16,7 @@ app = FastAPI(title="Stabilny Darmowy RAG w Chmurze", version="1.0.0", redirect_
 class PytanieRequest(BaseModel):
     prompt: str
 
-# --- 2. ZAKTUALIZOWANY ASYNCHRONICZNY GENERATOR ---
+# --- 2. POPRAWIONY ASYNCHRONICZNY GENERATOR DUCKDUCKGO ---
 async def ddg_rag_generator(prompt: str):
     try:
         # Krok A: Pobranie wiedzy z bazy danych pgvector
@@ -26,23 +26,24 @@ async def ddg_rag_generator(prompt: str):
         
         kontekst = wynik_bazy if wynik_bazy else "Brak dodatkowego kontekstu w bazie danych."
         
-        # Krok B: Budowanie pełnego zapytania tekstowego
+        # Krok B: Budowanie pełnego zapytania tekstowego z uwzględnieniem kontekstu
         pelny_prompt = (
             f"Jesteś pomocnym asystentem RAG. Odpowiadaj na podstawie kontekstu: {kontekst}\n\n"
             f"Pytanie użytkownika: {prompt}"
         )
         
-        # Krok C: Asynchroniczne wywołanie nowej klasy DDGS
-        async with DDGS() as ddgs:
-            # Metoda achat została zastąpiona asynchronicznym wywołaniem .achat() bezpośrednio na obiekcie DDGS
-            response = await ddgs.achat(keywords=pelny_prompt, model="llama-3-70b")
-            
-            if response:
-                # Rozdzielamy tekst na słowa, aby zasymulować efekt płynnego strumieniowania
-                for slowo in response.split(" "):
-                    yield slowo + " "
-            else:
-                yield "\n[Błąd: DuckDuckGo AI nie zwrócił odpowiedzi]"
+        # Krok C: Inicjalizacja obiektu DDGS (bez użycia kłopotliwego 'async with')
+        ddgs = DDGS()
+        
+        # Bezpośrednie wywołanie asynchronicznej metody .achat() z darmowym modelem Llama 3 70B
+        response = await ddgs.achat(keywords=pelny_prompt, model="llama-3-70b")
+        
+        if response:
+            # Rozdzielamy tekst na słowa, aby zasymulować efekt płynnego strumieniowania do frontendu
+            for slowo in response.split(" "):
+                yield slowo + " "
+        else:
+            yield "\n[Błąd: DuckDuckGo AI nie zwrócił odpowiedzi]"
 
     except Exception as e:
         yield f"\n[Błąd generatora: {str(e)}]"
