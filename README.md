@@ -1,42 +1,48 @@
-# FastAPI + PostgreSQL (pgvector) w chmurze Render
+# 100% Cloud-Based RAG API with FastAPI, PostgreSQL, and Google GenAI
 
-Projekt demonstracyjny przedstawiający implementację bazy wektorowej oraz wyszukiwania semantycznego przy użyciu **FastAPI**, **PostgreSQL** z rozszerzeniem **pgvector** oraz **Dockera**, wdrożony w chmurze produkcyjnej **Render**.
-
-## 🚀 Publiczny Link do Aplikacji (Swagger UI)
-
-Aplikacja jest w pełni wdrożona i dostępna publicznie pod poniższym adresem:
-👉 **[https://fastapi-docker-i29z.onrender.com/docs](https://fastapi-docker-i29z.onrender.com/docs)**
+A modern, lightweight, and fully cloud-deployed Retrieval-Augmented Generation (RAG) system built with **FastAPI**, backed by a cloud **PostgreSQL** database using the **pgvector** extension, and powered by **Google's Gemini AI**.
 
 ---
 
-## 🧭 Co dokładnie dzieje się pod maską?
+## ☁️ 100% Cloud Architecture
 
-Gdy otwierasz powyższy link i wywołujesz endpoint `POST /szukaj-wektorem/`, w architekturze chmurowej zachodzi zaawansowany proces podzielony na kilka etapów:
-
-1. **Publiczny Request HTTP**: Twoja przeglądarka wysyła żądanie przez internet. Trafia ono do serwerów platformy Render (w centrum danych we Frankfurcie), gdzie w odizolowanym środowisku działa kontener Docker z aplikacją FastAPI.
-2. **Generowanie Wektora (Embeddingu)**: Kod w Pythonie (korzystając z biblioteki `NumPy`) generuje wielowymiarowy wektor składający się z 1536 liczb zmiennoprzecinkowych. W docelowych systemach RAG (Retrieval-Augmented Generation) w tym miejscu model językowy (np. OpenAI text-embedding-3) zamienia wpisany przez użytkownika tekst na matematyczny zapis jego znaczenia semantycznego.
-3. **Wyszukiwanie Semantyczne w Bazie (pgvector)**: Aplikacja przekazuje ten wektor do bazy danych PostgreSQL. Dzięki wtyczce `pgvector` oraz operatorowi odległości cosinusowej (`<=>`), baza danych porównuje ten wektor w wielwymiarowej przestrzeni z rekordami zapisanymi podczas startu systemu (np. artykułem o AI oraz przepisem na obiad).
-4. **Kalkulacja Podobieństwa**: PostgreSQL nie szuka identycznych słów kluczowych – zamiast tego mierzy kąt i odległość matematyczną między wektorami. Im mniejsza odległość, tym większe podobieństwo znaczeniowe (semantyczne) między tekstami.
-5. **Odpowiedź JSON**: Najlepiej dopasowane rekordy wraz z wyliczonym współczynnikiem podobieństwa (`similarity`) są zwracane przez FastAPI bezpośrednio do Twojej przeglądarki z kodem statusu **200 OK**.
+This project is completely cloud-native and designed to run without local vector database dependencies:
+* **Hosting & Backend:** Deployed on **Render Web Service** (running FastAPI & Uvicorn).
+* **Vector Database:** Hosted on **Render PostgreSQL** with the `vector` extension enabled (`pgvector`).
+* **AI & Embeddings:** Directly integrated with **Google GenAI SDK** via secure cloud API calls (`gemini-embedding-2` for 1536-dimensional vectors and `gemini-3.6-flash` for response generation).
 
 ---
 
-## 🛠️ Struktura Projektu
+## ⚙️ The RAG Workflow & Recent Updates
 
-Projekt składa się z następujących komponentów pracujących w jednym ekosystemie:
-*   `main.py` – Aplikacja FastAPI zarządzająca endpointami, automatyczną inicjalizacją rozszerzenia wektorowego w bazie oraz logiką wyszukiwania.
-*   `Dockerfile` – Wieloetapowy (multi-stage) plik konfiguracyjny budujący zoptymalizowany, lekki obraz kontenera z aplikacją.
-*   `docker-compose.yml` – Konfiguracja lokalnego środowiska deweloperskiego (aplikacja + baza danych).
-*   `requirements.txt` – Spis wszystkich niezbędnych zależności Pythona (`sqlalchemy`, `pgvector`, `numpy`, `fastapi`, `uvicorn`, `psycopg2-binary`).
+1. **PDF Ingestion & Chunking (`/upload-pdf`):**
+   * Uploaded PDF files are read entirely in-memory using `pypdf`.
+   * Text is split into overlapping semantic chunks.
+   * Each chunk is embedded into a **1536-dimensional vector** via Google's `gemini-embedding-2`.
+   * Vectors and text contents are stored safely inside the cloud PostgreSQL `documents` table using standard SQL `CAST`.
+
+2. **Enhanced Semantic Search & Generation (`/chat-with-model`):**
+   * User queries are transformed into 1536-dimensional embeddings on the fly.
+   * Cosine distance similarity search (`<=>`) retrieves up to **6 most relevant context chunks** (`LIMIT 6`) from `pgvector` to ensure broader context coverage (e.g., catching specific definitions or deep-page mentions).
+   * Retrieved text snippets are injected into the prompt template and streamed back to the user via **Gemini 3.6 Flash**.
 
 ---
 
-## 🐳 Jak uruchomić projekt lokalnie?
+## 🚀 API Endpoints
 
-Jeśli chcesz uruchomić to środowisko na własnym komputerze, upewnij się, że masz zainstalowanego Dockera, a następnie wykonaj w folderze projektu:
+* `POST /upload-pdf`: Uploads a `.pdf` file, extracts text, chunks it, generates cloud embeddings (1536 dim), and saves it to `pgvector`.
+* `POST /chat-with-model`: Accepts a JSON payload `{ "prompt": "your question" }`, performs an expanded vector similarity search (`LIMIT 6`), and streams a context-aware AI response.
 
-```bash
-docker compose up --build
-```
+---
 
-Aplikacja lokalna będzie dostępna pod adresem: `http://localhost:8000/docs`
+## 📦 Installation & Local Development
+
+1. Clone the repository and install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Set up environment variables (`DATABASE_URL` and `GEMINI_API_KEY`).
+3. Run the application locally:
+   ```bash
+   uvicorn main:app --reload
+   ```

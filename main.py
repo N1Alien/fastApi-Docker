@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.0", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.1", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -73,7 +73,8 @@ async def upload_pdf(file: UploadFile = File(...)):
                     contents=chunk,
                     config=types.EmbedContentConfig(output_dimensionality=1536)
                 )
-                vector_values = embed_result.embeddings.values
+                # NAPRAWIONE: Bezpieczne wyciągnięcie wartości z pierwszego elementu listy embeddings
+                vector_values = embed_result.embeddings[0].values
                 vector_str = str(vector_values)
                 
                 conn.execute(
@@ -95,10 +96,10 @@ async def smart_rag_generator(prompt: str):
             contents=prompt,
             config=types.EmbedContentConfig(output_dimensionality=1536)
         )
-        query_vector_str = str(query_embed.embeddings.values)
+        # NAPRAWIONE: Bezpieczne wyciągnięcie wartości z pierwszego elementu listy embeddings
+        query_vector_str = str(query_embed.embeddings[0].values)
         
         session = SessionLocal()
-        # Zwiększony limit z 3 na 6, aby pobierać więcej fragmentów z bazy wektorowej
         db_results = session.execute(
             text("SELECT content FROM documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 6;"),
             {"qvec": query_vector_str}
