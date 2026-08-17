@@ -1,61 +1,63 @@
 import os
-import json
-import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+import google.generativeai as genai
 
+# --- 1. wczorajsza baza danych (PostgreSQL + pgvector z Rendera) ---
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+
+# --- 2. Konfiguracja oficjalnego SDK Google Gemini ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
-app = FastAPI(title="Testowy RAG Gemini w Chmurze", version="1.0.0", redirect_slashes=True)
+app = FastAPI(title="RAG z pgvector i Gemini w Chmurze", version="1.0.0", redirect_slashes=True)
 
 class PytanieRequest(BaseModel):
     prompt: str
 
-async def temp_gemini_generator(prompt: str):
+async def full_rag_generator(prompt: str):
+    """Pobiera realny kontekst z pgvector i strumieniuje odpowiedź z Gemini SDK."""
     try:
-        kontekst = "Tymczasowy kontekst testowy: Aplikacja w chmurze Render działa poprawnie."
+        # Krok A: Wczorajsze wyszukiwanie w bazie danych
+        session = SessionLocal()
+        wynik_bazy = session.execute(text("SELECT content FROM documents LIMIT 1;")).fetchone()
+        session.close()
         
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": f"Kontekst: {kontekst}\n\nPytanie: {prompt}"}
-                    ]
-                }
-            ]
-        }
-        
-        API_URL = f"https://googleapis.com{GEMINI_API_KEY}"
+        kontekst = wynik_bazy if wynik_bazy else "Brak dodatkowego kontekstu w bazie danych."
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream("POST", API_URL, json=payload) as response:
-                if response.status_code != 200:
-                    error_text = await response.aread()
-                    yield f"\n[Błąd Gemini API (Status {response.status_code}): {error_text.decode('utf-8')}]"
-                    return
-                
-                async for chunk in response.aiter_text():
-                    if chunk:
-                        try:
-                            cleaned_chunk = chunk.strip().lstrip(',').rstrip(',')
-                            if cleaned_chunk.startswith('[') or cleaned_chunk.endswith(']'):
-                                continue
-                            chunk_json = json.loads(cleaned_chunk)
-                            token = chunk_json["candidates"]["content"]["parts"]["text"]
-                            if token:
-                                yield token
-                        except Exception:
-                            continue
+        # Krok B: Sprawdzenie klucza i inicjalizacja modelu
+        if not GEMINI_API_KEY:
+            yield "[Błąd: Brak klucza GEMINI_API_KEY]"
+            return
+
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        pelny_prompt = (
+            f"Jesteś pomocnym asystentem RAG. Odpowiadaj wyłącznie na podstawie poniższego kontekstu.\n\n"
+            f"Kontekst z bazy danych: {kontekst}\n\n"
+            f"Pytanie użytkownika: {prompt}"
+        )
+
+        # Krok C: Bezpieczne strumieniowanie przez natywne SDK Google
+        response = model.generate_content(pelny_prompt, stream=True)
+        
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
 
     except Exception as e:
-        yield f"\n[Błąd systemu: {str(e)}]"
+        yield f"\n[Błąd generatora RAG: {str(e)}]"
 
 @app.post("/rag-hf-stream")
 async def rag_hf_stream(dane: PytanieRequest):
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Brakuje GEMINI_API_KEY.")
+    """Główny endpoint łączący wczorajszą bazę pgvector z dzisiejszym stabilnym Gemini."""
     return StreamingResponse(
-        temp_gemini_generator(prompt=dane.prompt),
+        full_rag_generator(prompt=dane.prompt),
         media_type="text/plain; charset=utf-8"
     )
