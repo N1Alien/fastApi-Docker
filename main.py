@@ -116,11 +116,14 @@ async def smart_rag_generator(prompt: str):
             model='gemini-3.6-flash',
             contents=(
                 f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
-                f"If the question relates to this knowledge, use it. Otherwise, answer "
-                f"based on your own general knowledge.\n\n"
+                f"Your task is to answer the user question. "
+                f"CRITICAL RULE: You MUST explicitly state in your answer if you are using the provided PDF chunks "
+                f"or your general knowledge. If you use the PDF chunks, append a section '[Source Code/Quote]' "
+                f"at the end of your response, quoting the exact sentence from the context that helped you answer.\n\n"
                 f"User question: {prompt}"
             ),
         )
+
         
         if hasattr(response, 'text') and response.text:
             yield response.text
