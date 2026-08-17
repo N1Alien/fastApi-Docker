@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.7.0", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.8.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -59,21 +59,22 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            # ZMIANA: Dopasowujemy definicję tabeli do Twoich 1536 wymiarów w bazie
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
                     content TEXT NOT NULL,
-                    embedding vector(768)
+                    embedding vector(1536)
                 );
             """))
             
             for chunk in chunks:
+                # ZMIANA: Wymuszamy wygenerowanie wektora o rozmiarze 1536, aby pasował do bazy
                 embed_result = client.models.embed_content(
                     model="gemini-embedding-2",
                     contents=chunk,
-                    config=types.EmbedContentConfig(output_dimensionality=768)
+                    config=types.EmbedContentConfig(output_dimensionality=1536)
                 )
-                # POPRAWKA: Pobieramy values z PIERWSZEGO elementu listy za pomocą [0]
                 vector_values = embed_result.embeddings[0].values
                 vector_str = str(vector_values)
                 
@@ -91,12 +92,12 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def smart_rag_generator(prompt: str):
     """Searches for context using pgvector and generates streaming response via Gemini."""
     try:
+        # ZMIANA: Wymuszamy wygenerowanie wektora o rozmiarze 1536 dla pytania
         query_embed = client.models.embed_content(
             model="gemini-embedding-2",
             contents=prompt,
-            config=types.EmbedContentConfig(output_dimensionality=768)
+            config=types.EmbedContentConfig(output_dimensionality=1536)
         )
-        # POPRAWKA: Pobieramy values z PIERWSZEGO elementu listy za pomocą [0]
         query_vector_str = str(query_embed.embeddings[0].values)
         
         session = SessionLocal()
@@ -107,7 +108,6 @@ async def smart_rag_generator(prompt: str):
         session.close()
         
         if db_results:
-            # Wyciągamy czysty tekst z krotek zwracanych przez bazę danych
             context = "\n---\n".join([row[0] for row in db_results])
         else:
             context = "No matching documents found in the database."
