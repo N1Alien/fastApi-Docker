@@ -8,53 +8,53 @@ from sqlalchemy.orm import sessionmaker
 from google import genai
 from pypdf import PdfReader
 
-# --- 1. Konfiguracja bazy danych (PostgreSQL + pgvector z Rendera) ---
+# --- 1. DATABASE CONFIGURATION ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
-# --- 2. Konfiguracja nowoczesnego SDK Google GenAI ---
+# --- 2. GOOGLE GENAI SDK CONFIGURATION ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-app = FastAPI(title="RAG z PDF i pgvector w Chmurze", version="2.1.0", redirect_slashes=True)
+app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.2.0", redirect_slashes=True)
 
-class PytanieRequest(BaseModel):
+class ChatRequest(BaseModel):
     prompt: str
 
-def podziel_tekst(tekst: str, rozmiar: int = 400, overlap: int = 50):
-    """Prosta strategia chunkingu z nakładaniem się (overlap)."""
-    kawałki = []
+def split_text(text_content: str, chunk_size: int = 400, overlap: int = 50):
+    """Simple chunking strategy with overlap."""
+    chunks = []
     start = 0
-    dlugosc = len(tekst)
-    while start < dlugosc:
-        koniec = start + rozmiar
-        kawałki.append(tekst[start:koniec])
-        start += rozmiar - overlap
-    return [k.strip() for k in kawałki if k.strip()]
+    text_length = len(text_content)
+    while start < text_length:
+        end = start + chunk_size
+        chunks.append(text_content[start:end])
+        start += chunk_size - overlap
+    return [c.strip() for c in chunks if c.strip()]
 
-# --- 3. Endpoint wczytujący plik PDF, chunking i zapis embeddingów ---
-@app.post("/wczytaj-pdf")
-async def wczytaj_pdf(file: UploadFile = File(...)):
-    """Wczytuje plik PDF, ekstrahuje tekst, dzieli na chunki, wektoryzuje i zapisuje w bazie wektorowej."""
+# --- 3. ENDPOINT: UPLOAD PDF, CHUNK AND SAVE EMBEDDINGS ---
+@app.post("/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    """Receives a PDF file, extracts text, splits into chunks, generates embeddings and saves to pgvector."""
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Brak klucza GEMINI_API_KEY.")
+        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY.")
         
     try:
         pdf_bytes = await file.read()
         pdf_stream = io.BytesIO(pdf_bytes)
         reader = PdfReader(pdf_stream)
         
-        pelny_tekst = ""
+        full_text = ""
         for page in reader.pages:
-            tekst_strona = page.extract_text()
-            if tekst_strona:
-                pelny_tekst += tekst_strona + "\n"
+            page_text = page.extract_text()
+            if page_text:
+                full_text += page_text + "\n"
                 
-        if not pelny_tekst.strip():
-            raise HTTPException(status_code=400, detail="Nie udało się odczytać tekstu z tego pliku PDF.")
+        if not full_text.strip():
+            raise HTTPException(status_code=400, detail="Could not read text from this PDF file.")
             
-        chunky = podziel_tekst(pelny_tekst)
+        chunks = split_text(full_text)
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
@@ -66,30 +66,30 @@ async def wczytaj_pdf(file: UploadFile = File(...)):
                 );
             """))
             
-            for chunk in chunky:
-                # Nowoczesne generowanie embeddingu przez Google GenAI SDK (model text-embedding-004 ma 768 wymiarów)
+            for chunk in chunks:
+                # Fix: Passed clean model name without 'models/' prefix
                 embed_result = client.models.embed_content(
                     model="text-embedding-004",
                     contents=chunk
                 )
-                wektor = embed_result.embeddings.values
-                wektor_str = str(wektor)
+                vector_values = embed_result.embeddings.values
+                vector_str = str(vector_values)
                 
                 conn.execute(
                     text("INSERT INTO documents (content, embedding) VALUES (:content, :embedding::vector)"),
-                    {"content": chunk, "embedding": wektor_str}
+                    {"content": chunk, "embedding": vector_str}
                 )
                 
-        return {"status": "success", "zindeksowano_fragmentow": len(chunky), "nazwa_pliku": file.filename}
+        return {"status": "success", "indexed_chunks": len(chunks), "file_name": file.filename}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Błąd przetwarzania PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PDF processing error: {str(e)}")
 
-# --- 4. Inteligentny generator oparty na wyszukiwaniu w bazie wektorowej ---
+# --- 4. RAG GENERATOR BUSINESS LOGIC ---
 async def smart_rag_generator(prompt: str):
-    """Wyszukuje pasujący fragment przez wektory w pgvector i generuje odpowiedź z Gemini."""
+    """Searches for context using pgvector and generates streaming response via Gemini."""
     try:
-        # Generowanie wektora dla pytania (768 wymiarów)
+        # Fix: Passed clean model name without 'models/' prefix
         query_embed = client.models.embed_content(
             model="text-embedding-004",
             contents=prompt
@@ -97,45 +97,43 @@ async def smart_rag_generator(prompt: str):
         query_vector_str = str(query_embed.embeddings.values)
         
         session = SessionLocal()
-        wyniki = session.execute(
+        db_results = session.execute(
             text("SELECT content FROM documents ORDER BY embedding <=> :qvec::vector LIMIT 3;"),
             {"qvec": query_vector_str}
         ).fetchall()
         session.close()
         
-        if wyniki:
-            kontekst = "\n---\n".join([row for row in wyniki])
+        if db_results:
+            context = "\n---\n".join([row[0] for row in db_results])
         else:
-            kontekst = "Brak pasujących dokumentów w bazie."
+            context = "No matching documents found in the database."
             
-        # Generowanie odpowiedzi przez model gemini-3.6-flash z nowym SDK
         response = client.models.generate_content(
             model='gemini-3.6-flash',
             contents=(
-                f"Jesteś inteligentnym asystentem. Masz dostęp do bazy wiedzy (fragmentów PDF):\n'{kontekst}'.\n\n"
-                f"Jeśli pytanie dotyczy tej wiedzy, wykorzystaj ją. W przeciwnym wypadku odpowiedz "
-                f"na podstawie własnej wiedzy ogólnej.\n\n"
-                f"Pytanie użytkownika: {prompt}"
+                f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
+                f"If the question relates to this knowledge, use it. Otherwise, answer "
+                f"based on your own general knowledge.\n\n"
+                f"User question: {prompt}"
             ),
         )
         
-        # Obsługa streamu z nowego SDK
-        if hasattr(response, 'text'):
+        if hasattr(response, 'text') and response.text:
             yield response.text
         else:
             yield str(response)
 
     except Exception as e:
-        yield f"\n[Błąd chmurowego RAG: {str(e)}]"
+        yield f"\n[Cloud RAG Error: {str(e)}]"
 
-# --- 5. Główny endpoint czatu ---
-@app.post("/chat-z-modelem")
-async def chat_z_modelem(dane: PytanieRequest):
-    """Płynny czat z modelem AI wzbogacony o wyszukiwanie w bazie wektorowej."""
+# --- 5. ENDPOINT: CHAT WITH MODEL ---
+@app.post("/chat-with-model")
+async def chat_with_model(request_data: ChatRequest):
+    """Streams responses from Gemini model enriched with vector database context."""
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Brak klucza GEMINI_API_KEY w panelu Render.")
+        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY in Render environment.")
         
     return StreamingResponse(
-        smart_rag_generator(prompt=dane.prompt),
+        smart_rag_generator(prompt=request_data.prompt),
         media_type="text/plain; charset=utf-8"
     )
