@@ -13,8 +13,8 @@ COPY main.py .
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
 
-# 6. NAPRAWIONE: Dodano paczkę google-genai bezpośrednio do listy instalacyjnej
-RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai
+# 6. INSTALACJA: Dodano langchain-google-genai oraz langgraph do instalatora
+RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph
 
 # 7. Skrypt startowy uruchamiający procesy po kolei
 RUN echo '#!/bin/bash\n\
