@@ -11,17 +11,13 @@ WORKDIR /app
 COPY requirements.txt .
 COPY main.py .
 
-# 5. Instalujemy zależności w przestrzeni użytkownika
-RUN pip3 install --no-cache-dir --user -r requirements.txt
+# 5. Bezpieczna globalna instalacja paczek z flagą --break-system-packages
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
-# 6. Skrypt startowy ze jawnym eksportem ścieżek Pythona i opóźnieniem
+# 6. Stabilny skrypt startowy z odpowiednim czasem na start serwera Ollama
 RUN echo '#!/bin/bash\n\
-# Wymuszamy, aby Python widział paczki zainstalowane przez --user\n\
-export PYTHONPATH="${PYTHONPATH}:/root/.local/lib/python3.12/site-packages:/root/.local/lib/python3.10/site-packages"\n\
-export PATH="${PATH}:/root/.local/bin"\n\
-\n\
 ollama serve &\n\
-sleep 7\n\
+sleep 10\n\
 \n\
 echo "Downloading embedding model..."\n\
 ollama pull nomic-embed-text\n\
@@ -38,5 +34,5 @@ EXPOSE 10000
 # Resetujemy twardy entrypoint obrazu bazowego
 ENTRYPOINT []
 
-# Uruchamiamy proces
+# Uruchamiamy proces przez bash
 CMD ["/bin/bash", "/app/start.sh"]
