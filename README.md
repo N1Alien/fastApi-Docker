@@ -1,116 +1,120 @@
-# ☁️ 100% Cloud-Native Production-Ready Hybrid RAG API
+# ☁️ 100% Cloud-Native Agentic RAG Stack with FastAPI, LangGraph, and PostgreSQL
 
-A cutting-edge, fully autonomous, and production-grade Retrieval-Augmented Generation (RAG) system. This entire ecosystem is built with **FastAPI**, backed by a cloud **PostgreSQL** cluster using the **`pgvector`** extension, and engineered into a singular **All-in-One Docker Container** running natively in the cloud. It features an ultra-optimized hybrid intelligence pipeline that completely eliminates token generation costs and third-party rate limits for vector processing.
+A cutting-edge, fully autonomous, and production-grade **Agentic RAG (Retrieval-Augmented Generation)** system. This entire ecosystem is built with **FastAPI**, backed by a cloud **PostgreSQL** cluster using the **`pgvector`** extension, and engineered into a singular, self-contained **All-in-One Docker Container** running natively in the chmura. 
+
+By leveraging **LangGraph**, the application transitions from a traditional, linear data pipeline into an intelligent, loop-based cognitive agent capable of multi-step reasoning, tool execution, and dynamic self-correction.
 
 ---
 
 ## 🌍 The Core Philosophy: 100% Serverless Cloud Infrastructure
 
-This application is **entirely independent of your local machine**. It does not require any local Python runtimes, local databases, or local Docker daemons to execute. You can completely shut down your local computer, and the API will remain live, accessible globally via its secure public URL with automated SSL certification.
+This application is **entirely independent of local machine hardware**. It does not require local Python runtimes, local database setups, or local Docker daemons to execute. You can completely shut down your local computer, and the system will remain fully operational, globally accessible via its secure public URL with automated SSL certification.
 
-### Detailed Cloud Topology:
-*   **The Container Ecosystem (Render Web Service):** The entire application logic—including the FastAPI backend, the Python runtime environment, and a fully functional embedded **Ollama** AI engine—is encapsulated inside a single Docker image built and hosted in the cloud.
-*   **The Vector Database Layer (Render PostgreSQL):** A fully managed, decoupled cloud PostgreSQL database instance. It has the native C-compiled `vector` extension enabled (`pgvector`), processing mathematical similarity operations on an isolated, persistent cloud storage volume.
-*   **The Generative Cognition Layer (Google AI Studio Cloud):** Advanced generative logic and reasoning are securely delegated via encrypted cloud-to-cloud HTTPS channels to Google's flagship production model (**`gemini-3.6-flash`**), utilizing an official developer API handshake that completely bypasses aggressive cloud firewalls or DDoS protection layers.
+### Cloud Network Topology:
+*   **The Container Ecosystem (Render Web Service):** Encapsulates the FastAPI framework, the Python 3.12 virtual environment, and a fully functional embedded **Ollama AI engine** within a single cloud-hosted Docker layer.
+*   **The Vector Database Layer (Render PostgreSQL):** A fully managed, decoupled cloud PostgreSQL instance with the native C-compiled `vector` extension enabled (`pgvector`), processing mathematical similarity operations on persistent cloud storage.
+*   **The Generative Cognition Layer (Google AI Studio Cloud):** Strategic reasoning and natural language synthesis are securely delegated via cloud-to-cloud HTTPS handshakes to Google's flagship production model (**`gemini-3.6-flash`**).
 
 ---
 
-## ⚙️ The Technical RAG Architecture & Ingestion Pipeline
+## 🧠 The Agentic Cognitive Architecture (LangGraph Engine)
 
-The project implements a highly advanced **Hybrid RAG Model**, splitting the resource-heavy vector indexing and the high-cognition text generation into two distinct, highly efficient specialized streams:
+Unlike standard RAG architectures that strictly search a database and dump text, this system utilizes a **State-Driven Directed Graph with Cycles (Agent Loop)**. The model acts as an executive decision-maker equipped with autonomous "hands" (Python tools).
 
 ```text
-[ Global User Client / Swagger UI ] 
-               │
-               │ (Secure HTTP POST JSON Payload / Multipart Form Data)
-               ▼
-┌─────────────────────────────────── RENDER CLOUD CONTAINER ───────────────────────────────────┐
-│                                                                                              │
-│   [ FastAPI Backend Framework ] <───(Internal Loopback via 127.0.0.1:11434)───> [ Ollama ]   │
-│                 │                                                                  │         │
-│                 │ (SQL Connection: CAST as Vector)                                 │         │
-│                 ▼                                                                  │         │
-│   [ CLOUD POSTGRESQL (pgvector) ] <────────────────────────────────────────────────┘         │
-│                 │ (Retrieves Exactly 6 Semantic Context Chunks)                              │
-│                 ▼                                                                            │
-│   [ Encrypted Cloud-to-Cloud Google GenAI SDK Session ]                                      │
-│                 │                                                                            │
-└─────────────────┼────────────────────────────────────────────────────────────────────────────┘
-                  │ (Fires Strict Contextual Augmentation Prompt)
-                  ▼
-    [ GOOGLE AI CLOUD SERVERS ] ───(Streams 200 OK Token Bundles)───> [ Global User Client ]
+               [ Global User Client / Swagger UI Panel ]
+                                  │
+                                  │ (Secure HTTP POST JSON Payload)
+                                  ▼
+┌────────────────────────────── RENDER CLOUD CONTAINER ──────────────────────────────┐
+│                                                                                    │
+│      ┌───────────────────────► [ Node: Agent (LLM) ] ───────────────────────┐      │
+│      │                                  │                                   │      │
+│      │                                  │ (Conditional Edge Evaluation)     │      │
+│      │                                  ▼                                   │      │
+│      │                        [ Decision: Tool Calls? ]                     │      │
+│      │                         /                     \                      │      │
+│      │                   (Yes) /                       \ (No)               │      │
+│      │                        ▼                         ▼                   │      │
+│      │               [ Node: Tool Executor ]         [ END ] ───────────────┼──────┐
+│      │                /                   \                                 │      │
+│      │               ▼                     ▼                                │      │
+│      │     [ Tool: System Date ]  [ Tool: pgvector RAG ]                    │      │
+│      │               │                     │                                │      │
+│      │               │ (Returns Value)     │ (Queries 768-dim Embeddings)   │      │
+│      │               ▼                     ▼                                │      │
+│      └──────── [ State Updated ]    [ CLOUD POSTGRESQL ]                     │      │
+│                                                                                    │      │
+└────────────────────────────────────────────────────────────────────────────────────┘      │
+                                                                                            │ (Immediate Token Stream)
+                                                                                            ▼
+                                                                                   [ Global User Client ]
 ```
 
-### 1. Document Ingestion & Unlimited Local-Cloud Chunking (`/upload-pdf`)
-*   **Multipart Stream Processing:** PDF files (such as enterprise security guides or massive ethical hacking manuals) are accepted and decoded entirely in-memory using an optimized `pypdf` buffer layer.
-*   **Recursive Semantic Chunking:** Text is broken down into structured, overlapping segments (`chunk_size=400`, `overlap=50`) to ensure critical phrases or structural vocabulary are never split at a physical slice boundary.
-*   **Zero-Cost Native Embeddings:** Each chunk is passed through the embedded cloud-container Ollama pipeline using the **`nomic-embed-text`** model. This localizes the heavy matrix computations inside your own container, granting you **unlimited, completely free vector generation** with zero API costs.
-*   **Mathematical Vector Insertion:** Generated vectors are mapped into a custom **768-dimensional space**. The Python layer translates these numerical matrices into structured strings and commits them to a dedicated, high-performance cloud table (`ollama_documents`) using a secure SQL **`CAST(:variable AS vector)`** protocol to prevent driver level syntax conflicts.
-
-### 2. Contextual Query Augmentation & Streaming (`/chat-with-model`)
-*   **Query Vectorization:** The user’s raw text question is instantly converted into a 768-dimensional vector by the container’s local Ollama instance.
-*   **Cosine Distance Evaluation:** The API queries the remote PostgreSQL database using the highly optimized **Cosine Distance Vector Operator (`<=>`)**.
-*   **Broad Context Extraction (`LIMIT 6`):** The database performs deep matrix multiplication across the multidimensional indexes and extracts exactly the **6 most relevant text fragments** (`LIMIT 6`), guaranteeing that dense documentation across multiple hidden pages is successfully recovered.
-*   **Cognitive Text Generation:** The FastAPI layer merges the retrieved knowledge into a strict structural template and hands it over to **Gemini 3.6 Flash** via the modern `google-genai` SDK. Gemini reads the exact facts, processes the logic, and streams a secure, accurate response back to the client.
+### The Multi-Step Execution Flow:
+1.  **State Initialization:** The user’s request enters the graph and initializes the `AgentState` message sequence.
+2.  **Cognitive Evaluation (`agent` Node):** Gemini 3.6 Flash assesses the state. It determines if it lacks information to fulfill the user's explicit logic (e.g., temporal calculations or domain knowledge).
+3.  **Conditional Routing (`should_continue` Edge):** 
+    *   If Gemini requests automated actions, the graph branches into the **`tools` Node**.
+    *   If the reasoning is complete, the graph terminates (`END`) and streams the finalized text.
+4.  **Autonomous Tool Execution (`tools` Node):** The system dynamically invokes the selected Python tools:
+    *   📅 **`get_current_date`**: Fires a system-level clock call inside the container, injecting the exact real-time cloud calendar data into the agent's memory block.
+    *   🗄️ **`search_week6_database`**: Passes text parameters into the local Ollama **`nomic-embed-text`** instance, creates a 768-dimensional matrix, and executes a Cosine Distance Similarity query (`<=>`) against the live cloud database, returning the top 6 most relevant document chunks (`LIMIT 6`).
+5.  **Feedback Loop (The Cycle):** The tool results are structuralized into `ToolMessage` nodes, injected back into the central state, and routed straight back to the `agent` node. The LLM re-evaluates the expanded memory and can trigger additional tool cycles if required.
 
 ---
 
-## 🚀 Public API Endpoints
+## 🚀 Optimized Ingestion Pipeline (`/upload-pdf`)
 
-Once deployed, the cloud server exposes an interactive, automated **Swagger UI Documentation Panel** at `/docs`, offering full control over the two production-ready endpoints:
+*   **Memory-Buffered Text Extraction:** Incoming PDF files (such as ancient historical texts, corporate manifests, or technical documents) are processed entirely in-memory via an un-cached `pypdf` stream reader.
+*   **Overlapping Chunking Layer:** Documents are dynamically sliced into granular blocks (`chunk_size=400`, `overlap=50`) to eliminate semantic truncation at hard pagination splits.
+*   **Zero-Cost Native Embedding Pipelines:** Text slices are indexed inside your own cloud container using Ollama's embedded libraries. This layout bypasses expensive third-party embedding tokens, allowing **limitless document processing completely for free**.
+*   **Type-Safe Database Rifting:** Floating-point matrices are bound into safe, clean strings and committed to the remote database via standard SQL **`CAST(:variable AS vector)`** syntax, avoiding library-level compiler bugs.
+
+---
+
+## 📈 Public Endpoints & Data Contracts
+
+The microservice exposes an interactive **Swagger UI Documentation Suite** at `/docs`:
 
 ### 📁 `POST /upload-pdf`
-*   **Input Type:** `multipart/form-data` (Accepts binary `.pdf` files).
-*   **Behavior:** Extracts, slices, generates 768-dim embeddings, and registers the data inside the remote database.
-*   **Response:**
+*   **Payload Type:** `multipart/form-data` (Binary file streaming)
+*   **Action:** Triggers extraction, structural alignment, local-container embedding, and inserts the data into the cloud-hosted `ollama_documents` table.
+*   **Contract Response:**
     ```json
     {
       "status": "success",
-      "indexed_chunks": 42,
-      "file_name": "ethical_hacking_bootcamp.pdf"
+      "indexed_chunks": 15,
+      "file_name": "third_letter_of_john.pdf"
     }
     ```
 
 ### 💬 `POST /chat-with-model`
-*   **Input Type:** `application/json`
+*   **Payload Type:** `application/json`
 *   **Payload Format:**
     ```json
     {
-      "prompt": "What is a black hat hacker according to the uploaded documentation?"
+      "prompt": "Based on the Week 6 document, calculate exactly how many years have passed since the Third Letter of John was written in 90 AD up until today."
     }
     ```
-*   **Behavior:** Vectorizes the prompt, pulls the 6 closest matching documents via `<=>` sorting, passes them to Gemini 3.6 Flash, and returns a raw streamed text response token by token with an immediate HTTP Status **200 OK**.
+*   **Action:** Runs the LangGraph loop, activates system date tracking and vector database similarity lookups, calculates the math, and returns a clean streamed response block.
 
 ---
 
-## 📦 Local Reproduction & Requirements
+## 📦 Local Installation & Environment Execution
 
-While designed to live eternally in the cloud, you can run this stack for development purposes.
+To run this production framework in a local sandbox mode:
 
-### 1. Dependencies (`requirements.txt`)
-```text
-fastapi
-uvicorn
-pydantic
-psycopg2-binary
-sqlalchemy
-pgvector
-numpy
-pypdf
-python-multipart
-ollama
-google-genai
-```
-
-### 2. Environment Setup
-To let the app communicate with the remote database and Google's neural layers, export the required cloud credentials:
-```bash
-export DATABASE_URL="postgresql://user:password@cloud-host:5432/dbname"
-export GEMINI_API_KEY="AIzaSyYourSecretKeyFromGoogleAIStudio"
-```
-
-### 3. Execution
-```bash
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 10000 --reload
-```
+1. Clone the repository and install the synchronized runtime requirements:
+   ```bash
+   pip install fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph
+   ```
+2. Export your direct cloud infrastructure parameters to the terminal context:
+   ```bash
+   export DATABASE_URL="postgresql://user:password@://render.com"
+   export GEMINI_API_KEY="AIzaSyYourPrivateHandshakeKeyFromGoogleAIStudio"
+   ```
+3. Run the microservice framework locally:
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port 10000 --reload
+   ```
