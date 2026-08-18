@@ -1,42 +1,40 @@
-# 1. Oficjalny i stabilny obraz Pythona
-FROM python:3.11-slim
+# 1. Budujemy na oficjalnym obrazie Ollamy (gdzie binaria działają bezbłędnie)
+FROM ollama/ollama:latest
 
-# 2. Instalujemy niezbędne narzędzia systemowe (w tym ca/certificates do bezpiecznych pobrań)
-RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+# 2. Instalujemy Pythona i niezbędne narzędzia systemowe
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv curl && rm -rf /var/lib/apt/lists/*
 
-# 3. OMINIĘCIE INSTALATORA: Pobieramy gotowy, skompilowany plik binarny Ollamy dla Linux x86_64
-RUN curl -L https://github.com -o /usr/bin/ollama && \
-    chmod +x /usr/bin/ollama
-
-# 4. Ustawiamy katalog roboczy dla naszej aplikacji
+# 3. Ustawiamy katalog roboczy dla aplikacji FastAPI
 WORKDIR /app
 
-# 5. Kopiujemy pliki projektu
+# 4. Kopiujemy listę zależności i kod źródłowy
 COPY requirements.txt .
 COPY main.py .
 
-# 6. Standardowa i czysta instalacja bibliotek (w tym modułu ollama)
-RUN pip install --no-cache-dir -r requirements.txt
+# 5. Tworzymy i izolujemy środowisko wirtualne Pythona
+RUN python3 -m venv /app/venv
+RUN /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# 7. Stabilny skrypt startowy z jawną konfiguracją katalogu modeli
+# 6. Skrypt startowy: Aktywujemy środowisko venv i odpalamy procesy sequentially
 RUN echo '#!/bin/bash\n\
-export OLLAMA_MODELS="/app/ollama_models"\n\
-mkdir -p /app/ollama_models\n\
-\n\
 ollama serve &\n\
 sleep 8\n\
 \n\
-echo "Downloading embedding model via local Ollama..."\n\
+echo "Downloading embedding model..."\n\
 ollama pull nomic-embed-text\n\
 \n\
 echo "Starting FastAPI app..."\n\
-uvicorn main:app --host 0.0.0.0 --port 10000\n\
+# JAWNE WYWOŁANIE UVICORNA BEZPOŚREDNIO Z KATALOGU BINARNEGO ŚRODOWISKA VENV\n\
+/app/venv/bin/uvicorn main:app --host 0.0.0.0 --port 10000\n\
 ' > /app/start.sh
 
 RUN chmod +x /app/start.sh
 
-# Port wymagany przez chmurę Render
+# Wygląd zewnętrzny portu dla chmury Render
 EXPOSE 10000
 
-# Uruchamiamy proces przez powłokę bash
+# Resetujemy twardy ENTRYPOINT Ollamy
+ENTRYPOINT []
+
+# Uruchamiamy proces przez bash
 CMD ["/bin/bash", "/app/start.sh"]
