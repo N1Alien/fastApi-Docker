@@ -7,14 +7,14 @@ RUN apt-get update && apt-get install -y python3 python3-pip python3-venv curl &
 # 3. Ustawiamy katalog roboczy dla aplikacji FastAPI
 WORKDIR /app
 
-# 4. Kopiujemy wyłącznie plik main.py (omijamy requirements.txt z cache)
+# 4. Kopiujemy plik main.py
 COPY main.py .
 
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
 
-# 6. WYMUSZONA INSTALACJA BEZPOŚREDNIA: Wpisujemy pakiety z palca, ignorując cache
-RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama
+# 6. NAPRAWIONE: Dodano paczkę google-genai bezpośrednio do listy instalacyjnej
+RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai
 
 # 7. Skrypt startowy uruchamiający procesy po kolei
 RUN echo '#!/bin/bash\n\
