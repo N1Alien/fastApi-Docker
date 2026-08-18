@@ -28,8 +28,11 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 10000\n\
 
 RUN chmod +x /app/start.sh
 
-# Wygląd zewnętrzny portu dla chmury Render (Render domyślnie szuka portu 10000)
+# Wygląd zewnętrzny portu dla chmury Render
 EXPOSE 10000
 
-# Uruchamiamy nasz skrypt startowy
-CMD ["/app/start.sh"]
+# POPRAWKA: Resetujemy twardy ENTRYPOINT Ollamy, aby kontener pozwolił na odpalenie skryptu bash
+ENTRYPOINT []
+
+# Uruchamiamy nasz skrypt startowy przez powłokę systemową
+CMD ["/bin/bash", "/app/start.sh"]
