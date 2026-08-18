@@ -17,13 +17,11 @@ SessionLocal = sessionmaker(bind=engine)
 
 # --- 2. GOOGLE GENAI & EMBEDDED OLLAMA CONFIGURATION ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Inicjalizacja nowoczesnego klienta Google GenAI (będzie generował czat)
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
-# Inicjalizacja klienta Ollama (generuje wyłącznie wektory 768 w tle)
 ollama_client = ollama.Client(host="http://127.0.0.1:11434")
 
-app = FastAPI(title="Hybrid Free Cloud RAG Container", version="3.4.0", redirect_slashes=True)
+app = FastAPI(title="Hybrid Free Cloud RAG Container", version="3.4.1", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -88,7 +86,6 @@ async def upload_pdf(file: UploadFile = File(...)):
 # --- 4. RAG GENERATOR VIA STABLE GOOGLE GEMINI SDK ---
 async def smart_rag_generator(prompt: str):
     try:
-        # Generowanie wektora zapytania o wymiarowości 768 przez wewnętrzną Ollamę
         query_embed = ollama_client.embeddings(
             model='nomic-embed-text',
             prompt=prompt
@@ -96,7 +93,6 @@ async def smart_rag_generator(prompt: str):
         query_vector_str = str(query_embed['embedding'])
         
         session = SessionLocal()
-        # Wyciągamy dane z nowej, działającej tabeli wektorowej 768
         db_results = session.execute(
             text("SELECT content FROM ollama_documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 6;"),
             {"qvec": query_vector_str}
@@ -108,9 +104,9 @@ async def smart_rag_generator(prompt: str):
         else:
             context = "No matching documents found in the database."
             
-        # Generowanie odpowiedzi przy użyciu bezpiecznego klucza Gemini przez oficjalne, nowoczesne SDK
+        # ZMIANA: Przełączenie na najnowszy, wspierany model gemini-3.6-flash
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=(
                 f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
                 f"If the question relates to this knowledge, use it. Otherwise, answer "
