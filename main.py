@@ -5,8 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from google import genai
-from google.genai import types
+import ollama
 from pypdf import PdfReader
 
 # --- 1. DATABASE CONFIGURATION ---
@@ -14,11 +13,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
-# --- 2. GOOGLE GENAI SDK CONFIGURATION ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
+# --- 2. EMBEDDED OLLAMA CONFIGURATION ---
+# Ollama działa w tym samym kontenerze, więc uderzamy w localhost
+ollama_client = ollama.Client(host="http://127.0.0.1:11434")
 
-app = FastAPI(title="RAG with PDF and pgvector in Cloud", version="2.9.4", redirect_slashes=True)
+app = FastAPI(title="All-in-One Cloud RAG Container", version="3.1.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -37,10 +36,7 @@ def split_text(text_content: str, chunk_size: int = 400, overlap: int = 50):
 # --- 3. ENDPOINT: UPLOAD PDF, CHUNK AND SAVE EMBEDDINGS ---
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    """Receives a PDF file, extracts text, splits into chunks, generates embeddings and saves to pgvector."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY.")
-        
+    """Receives a PDF file, extracts text, splits into chunks, generates embeddings via Ollama and saves to pgvector."""
     try:
         pdf_bytes = await file.read()
         pdf_stream = io.BytesIO(pdf_bytes)
@@ -59,22 +55,21 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            # Model nomic-embed-text z Ollamy generuje 768 wymiarów
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
                     content TEXT NOT NULL,
-                    embedding vector(1536)
+                    embedding vector(768)
                 );
             """))
             
             for chunk in chunks:
-                embed_result = client.models.embed_content(
-                    model="gemini-embedding-2",
-                    contents=chunk,
-                    config=types.EmbedContentConfig(output_dimensionality=1536)
+                embed_res = ollama_client.embeddings(
+                    model='nomic-embed-text',
+                    prompt=chunk
                 )
-                # NAPRAWIONE: Używamy [0] bo embeddings to lista
-                vector_values = embed_result.embeddings[0].values
+                vector_values = embed_res['embedding']
                 vector_str = str(vector_values)
                 
                 conn.execute(
@@ -89,15 +84,13 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 # --- 4. RAG GENERATOR BUSINESS LOGIC ---
 async def smart_rag_generator(prompt: str):
-    """Searches for context using pgvector and generates streaming response via Gemini."""
+    """Searches for context using pgvector and generates streaming response via local container Ollama."""
     try:
-        query_embed = client.models.embed_content(
-            model="gemini-embedding-2",
-            contents=prompt,
-            config=types.EmbedContentConfig(output_dimensionality=1536)
+        query_embed = ollama_client.embeddings(
+            model='nomic-embed-text',
+            prompt=prompt
         )
-        # NAPRAWIONE: Używamy [0] bo embeddings to lista
-        query_vector_str = str(query_embed.embeddings[0].values)
+        query_vector_str = str(query_embed['embedding'])
         
         session = SessionLocal()
         db_results = session.execute(
@@ -106,36 +99,30 @@ async def smart_rag_generator(prompt: str):
         ).fetchall()
         session.close()
         
-        if db_results:
-            context = "\n---\n".join([row[0] for row in db_results])
-        else:
-            context = "No matching documents found in the database."
-            
-        response = client.models.generate_content(
-            model='gemini-3.6-flash',
-            contents=(
-                f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
-                f"If the question relates to this knowledge, use it. Otherwise, answer "
-                f"based on your own general knowledge.\n\n"
-                f"User question: {prompt}"
-            ),
-        )
+        context = "\n---\n".join([row for row in db_results]) if db_results else "No matching documents found."
         
-        if hasattr(response, 'text') and response.text:
-            yield response.text
-        else:
-            yield str(response)
+        # Strumieniowanie z modelu llama3.2 zainstalowanego wewnątrz kontenera
+        stream = ollama_client.chat(
+            model='llama3.2',
+            messages=[
+                {
+                    'role': 'system', 
+                    'content': f"You are an intelligent assistant. Answer the user based on this PDF context:\n{context}"
+                },
+                {'role': 'user', 'content': prompt}
+            ],
+            stream=True,
+        )
+        for chunk in stream:
+            yield chunk['message']['content']
 
     except Exception as e:
-        yield f"\n[Cloud RAG Error: {str(e)}]"
+        yield f"\n[Container Ollama Error: {str(e)}]"
 
 # --- 5. ENDPOINT: CHAT WITH MODEL ---
 @app.post("/chat-with-model")
 async def chat_with_model(request_data: ChatRequest):
-    """Streams responses from Gemini model enriched with vector database context."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY in Render environment.")
-        
+    """Streams responses from internal Ollama model enriched with vector database context."""
     return StreamingResponse(
         smart_rag_generator(prompt=request_data.prompt),
         media_type="text/plain; charset=utf-8"
