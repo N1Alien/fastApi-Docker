@@ -1,11 +1,12 @@
-# 1. Budujemy na oficjalnym, stabilnym obrazie Pythona
+# 1. Oficjalny i stabilny obraz Pythona
 FROM python:3.11-slim
 
-# 2. Instalujemy niezbędne narzędzia systemowe
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# 2. Instalujemy niezbędne narzędzia systemowe (w tym ca/certificates do bezpiecznych pobrań)
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# 3. NAPRAWIONE: Oficjalna ścieżka instalacyjna z końcówką /install.sh
-RUN curl -fsSL https://ollama.com | sh
+# 3. OMINIĘCIE INSTALATORA: Pobieramy gotowy, skompilowany plik binarny Ollamy dla Linux x86_64
+RUN curl -L https://github.com -o /usr/bin/ollama && \
+    chmod +x /usr/bin/ollama
 
 # 4. Ustawiamy katalog roboczy dla naszej aplikacji
 WORKDIR /app
@@ -14,7 +15,7 @@ WORKDIR /app
 COPY requirements.txt .
 COPY main.py .
 
-# 6. Standardowa instalacja bibliotek bez błędów ścieżek
+# 6. Standardowa i czysta instalacja bibliotek (w tym modułu ollama)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 7. Stabilny skrypt startowy z jawną konfiguracją katalogu modeli
@@ -37,5 +38,5 @@ RUN chmod +x /app/start.sh
 # Port wymagany przez chmurę Render
 EXPOSE 10000
 
-# Uruchamiamy proces przez bash
+# Uruchamiamy proces przez powłokę bash
 CMD ["/bin/bash", "/app/start.sh"]
