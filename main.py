@@ -1,7 +1,5 @@
 import os
 import io
-import json
-import urllib.request
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -9,16 +7,23 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import ollama
 from pypdf import PdfReader
+from google import genai
+from google.genai import types
 
 # --- 1. DATABASE CONFIGURATION ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
-# --- 2. EMBEDDED OLLAMA CONFIGURATION (FOR EMBEDDINGS ONLY) ---
+# --- 2. GOOGLE GENAI & EMBEDDED OLLAMA CONFIGURATION ---
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Inicjalizacja nowoczesnego klienta Google GenAI (będzie generował czat)
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
+
+# Inicjalizacja klienta Ollama (generuje wyłącznie wektory 768 w tle)
 ollama_client = ollama.Client(host="http://127.0.0.1:11434")
 
-app = FastAPI(title="Hybrid Free Cloud RAG Container", version="3.3.0", redirect_slashes=True)
+app = FastAPI(title="Hybrid Free Cloud RAG Container", version="3.4.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -54,7 +59,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-            # ZMIANA: Tworzymy nową, czystą tabelę ollama_documents dedykowaną pod 768 wymiarów
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS ollama_documents (
                     id SERIAL PRIMARY KEY,
@@ -71,7 +75,6 @@ async def upload_pdf(file: UploadFile = File(...)):
                 vector_values = embed_res['embedding']
                 vector_str = str(vector_values)
                 
-                # ZMIANA: Zapisujemy dane do nowej tabeli ollama_documents
                 conn.execute(
                     text("INSERT INTO ollama_documents (content, embedding) VALUES (:content, CAST(:embedding AS vector))"),
                     {"content": chunk, "embedding": vector_str}
@@ -82,9 +85,10 @@ async def upload_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF processing error: {str(e)}")
 
-# --- 4. RAG GENERATOR VIA FREE WEB API ---
+# --- 4. RAG GENERATOR VIA STABLE GOOGLE GEMINI SDK ---
 async def smart_rag_generator(prompt: str):
     try:
+        # Generowanie wektora zapytania o wymiarowości 768 przez wewnętrzną Ollamę
         query_embed = ollama_client.embeddings(
             model='nomic-embed-text',
             prompt=prompt
@@ -92,41 +96,33 @@ async def smart_rag_generator(prompt: str):
         query_vector_str = str(query_embed['embedding'])
         
         session = SessionLocal()
-        # ZMIANA: Przeszukujemy nową tabelę ollama_documents, dopasowaną wymiarami
+        # Wyciągamy dane z nowej, działającej tabeli wektorowej 768
         db_results = session.execute(
             text("SELECT content FROM ollama_documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 6;"),
             {"qvec": query_vector_str}
         ).fetchall()
         session.close()
         
-        context = "\n---\n".join([row[0] for row in db_results]) if db_results else "No matching documents found."
-        
-        full_prompt = (
-            f"<|im_start|>system\nAnswer based on this PDF context: {context}<|im_end|>\n"
-            f"<|im_start|>user\n{prompt}<|im_end|>\n"
-            f"<|im_start|>assistant\n"
+        if db_results:
+            context = "\n---\n".join([row[0] for row in db_results])
+        else:
+            context = "No matching documents found in the database."
+            
+        # Generowanie odpowiedzi przy użyciu bezpiecznego klucza Gemini przez oficjalne, nowoczesne SDK
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=(
+                f"You are an intelligent assistant. You have access to the knowledge base (PDF chunks):\n'{context}'.\n\n"
+                f"If the question relates to this knowledge, use it. Otherwise, answer "
+                f"based on your own general knowledge.\n\n"
+                f"User question: {prompt}"
+            ),
         )
         
-        API_URL = "https://huggingface.co"
-        payload = {
-            "inputs": full_prompt,
-            "parameters": {"max_new_tokens": 512, "return_full_text": False}
-        }
-        
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(API_URL, data=data, headers={"Content-Type": "application/json"})
-        
-        with urllib.request.urlopen(req, timeout=30) as response:
-            res_body = json.loads(response.read().decode("utf-8"))
-            if isinstance(res_body, list) and len(res_body) > 0:
-                generated_text = res_body[0].get("generated_text", "")
-            else:
-                generated_text = str(res_body)
-                
-            generated_text = generated_text.replace("<|im_end|>", "").strip()
-            
-            for word in generated_text.split(" "):
-                yield word + " "
+        if hasattr(response, 'text') and response.text:
+            yield response.text
+        else:
+            yield str(response)
 
     except Exception as e:
         yield f"\n[Cloud RAG Error: {str(e)}]"
@@ -134,6 +130,10 @@ async def smart_rag_generator(prompt: str):
 # --- 5. ENDPOINT: CHAT WITH MODEL ---
 @app.post("/chat-with-model")
 async def chat_with_model(request_data: ChatRequest):
+    """Streams responses from Gemini model enriched with local Ollama 768 vector context."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY in Render environment.")
+        
     return StreamingResponse(
         smart_rag_generator(prompt=request_data.prompt),
         media_type="text/plain; charset=utf-8"
