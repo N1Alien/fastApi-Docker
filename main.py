@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine)
 # --- 2. EMBEDDED OLLAMA CONFIGURATION (FOR EMBEDDINGS ONLY) ---
 ollama_client = ollama.Client(host="http://127.0.0.1:11434")
 
-app = FastAPI(title="Hybrid Free Cloud RAG Container", version="3.2.0", redirect_slashes=True)
+app = FastAPI(title="Hybrid Free Cloud RAG Container", version="3.3.0", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -54,8 +54,9 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            # ZMIANA: Tworzymy nową, czystą tabelę ollama_documents dedykowaną pod 768 wymiarów
             conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS documents (
+                CREATE TABLE IF NOT EXISTS ollama_documents (
                     id SERIAL PRIMARY KEY,
                     content TEXT NOT NULL,
                     embedding vector(768)
@@ -70,8 +71,9 @@ async def upload_pdf(file: UploadFile = File(...)):
                 vector_values = embed_res['embedding']
                 vector_str = str(vector_values)
                 
+                # ZMIANA: Zapisujemy dane do nowej tabeli ollama_documents
                 conn.execute(
-                    text("INSERT INTO documents (content, embedding) VALUES (:content, CAST(:embedding AS vector))"),
+                    text("INSERT INTO ollama_documents (content, embedding) VALUES (:content, CAST(:embedding AS vector))"),
                     {"content": chunk, "embedding": vector_str}
                 )
                 
@@ -90,15 +92,15 @@ async def smart_rag_generator(prompt: str):
         query_vector_str = str(query_embed['embedding'])
         
         session = SessionLocal()
+        # ZMIANA: Przeszukujemy nową tabelę ollama_documents, dopasowaną wymiarami
         db_results = session.execute(
-            text("SELECT content FROM documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 6;"),
+            text("SELECT content FROM ollama_documents ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 6;"),
             {"qvec": query_vector_str}
         ).fetchall()
         session.close()
         
         context = "\n---\n".join([row[0] for row in db_results]) if db_results else "No matching documents found."
         
-        # Przygotowanie zapytania dla darmowego, zewnętrznego modelu Qwen (odporne na limity pamięci RAM)
         full_prompt = (
             f"<|im_start|>system\nAnswer based on this PDF context: {context}<|im_end|>\n"
             f"<|im_start|>user\n{prompt}<|im_end|>\n"
