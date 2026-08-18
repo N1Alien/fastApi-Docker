@@ -1,38 +1,36 @@
-# 1. Budujemy na oficjalnym obrazie Ollamy
-FROM ollama/ollama:latest
+# 1. Budujemy na oficjalnym, stabilnym obrazie Pythona
+FROM python:3.11-slim
 
-# 2. Instalujemy Pythona oraz niezbędne pakiety systemowe
-RUN apt-get update && apt-get install -y python3 python3-pip curl && rm -rf /var/lib/apt/lists/*
+# 2. Instalujemy niezbędne narzędzia systemowe (curl do instalacji Ollamy)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# 3. Ustawiamy katalog roboczy
+# 3. Instalujemy Ollamę bezpośrednio w systemie kontenera jednym oficjalnym poleceniem
+RUN curl -fsSL https://ollama.com | sh
+
+# 4. Ustawiamy katalog roboczy dla naszej aplikacji
 WORKDIR /app
 
-# 4. Kopiujemy pliki projektu
+# 5. Kopiujemy pliki projektu
 COPY requirements.txt .
 COPY main.py .
 
-# 5. Bezpieczna globalna instalacja paczek z flagą --break-system-packages
-RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+# 6. Standardowa instalacja bibliotek (na tym obrazie zadziała bez żadnych flag i błędów)
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. Stabilny skrypt startowy z odpowiednim czasem na start serwera Ollama
+# 7. Skrypt startowy: Odpala serwer Ollamy, czeka, pobiera model i podnosi FastAPI
 RUN echo '#!/bin/bash\n\
 ollama serve &\n\
-sleep 10\n\
-\n\
-echo "Downloading embedding model..."\n\
+sleep 8\n\
+echo "Downloading embedding model via local Ollama..."\n\
 ollama pull nomic-embed-text\n\
-\n\
 echo "Starting FastAPI app..."\n\
-python3 -m uvicorn main:app --host 0.0.0.0 --port 10000\n\
+uvicorn main:app --host 0.0.0.0 --port 10000\n\
 ' > /app/start.sh
 
 RUN chmod +x /app/start.sh
 
-# Port dla chmury Render
+# Port wymagany przez chmurę Render
 EXPOSE 10000
 
-# Resetujemy twardy entrypoint obrazu bazowego
-ENTRYPOINT []
-
-# Uruchamiamy proces przez bash
+# Uruchamiamy proces
 CMD ["/bin/bash", "/app/start.sh"]
