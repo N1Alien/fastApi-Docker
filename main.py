@@ -42,7 +42,6 @@ def get_current_date() -> str:
 def search_week6_database(query: str) -> str:
     """Searches the Week 6 internal database (ollama_documents) for context about hacking guidelines, frameworks or threat groups. Input should be a search query string."""
     try:
-        # Generowanie wektora zapytania 768-dim przez wewnętrzną Ollamę
         query_embed = ollama_client.embeddings(
             model='nomic-embed-text',
             prompt=query
@@ -62,19 +61,17 @@ def search_week6_database(query: str) -> str:
     except Exception as e:
         return f"Error querying database: {str(e)}"
 
-# Zamykamy narzędzia w listę i spinamy z węzłem wykonawczym LangGraph
 tools = [get_current_date, search_week6_database]
 tool_node = ToolNode(tools)
 
 # --- 5. INICJALIZACJA MODELU GEMINI Z WBUDOWANYMI NARZĘDZIAMI ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Używamy oficjalnej warstwy LangChain dla Gemini 3.6 Flash
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 model = ChatGoogleGenerativeAI(
     model="gemini-3.6-flash", 
     google_api_key=GEMINI_API_KEY,
     temperature=0.1
 )
-# Rejestrujemy narzędzia wewnątrz modelu Gemini (Function Calling binding)
 model_with_tools = model.bind_tools(tools)
 
 # --- 6. LOGIKA PRZEPŁYWU GRAFU (GRAPH NODES & EDGES) ---
@@ -94,14 +91,11 @@ def should_continue(state: AgentState):
 # --- 7. BUDOWANIE I KOMPILACJA GRAFU LANGGRAPH ---
 workflow = StateGraph(AgentState)
 
-# Rejestracja węzłów w grafie
 workflow.add_node("agent", call_model)
 workflow.add_node("tools", tool_node)
 
-# Ustawienie punktu wejścia
 workflow.set_entry_point("agent")
 
-# Dodanie krawędzi warunkowej wychodzącej z węzła agenta
 workflow.add_conditional_edges(
     "agent",
     should_continue,
@@ -111,14 +105,11 @@ workflow.add_conditional_edges(
     }
 )
 
-# Po wykonaniu narzędzia pętla zawsze wraca do agenta (Cykl!)
 workflow.add_edge("tools", "agent")
-
-# Kompilacja grafu do postaci wykonywalnej aplikacji kognitywnej
 langgraph_agent = workflow.compile()
 
 # --- 8. INICJALIZACJA APLIKACJI FASTAPI ---
-app = FastAPI(title="LangGraph Agentic RAG Stack in Cloud", version="4.0.0", redirect_slashes=True)
+app = FastAPI(title="LangGraph Agentic RAG Stack in Cloud", version="4.0.1", redirect_slashes=True)
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -179,25 +170,35 @@ async def upload_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF processing error: {str(e)}")
 
-# --- 9. ENDPOINT CZATU: WYKONANIE GRAFU LANGGRAPH ---
+# --- 9. ENDPOINT CZATU: NAPRAWIONE PARSOWANIE TEKSTU ---
 async def agent_stream_generator(prompt: str):
     try:
-        # Inicjalizujemy stan początkowy grafu z pytaniem użytkownika
         inputs = {"messages": [HumanMessage(content=prompt)]}
-        
-        # Wykonujemy graf kognitywny krok po kroku
-        config = {"recursion_limit": 20} # Zabezpieczenie przed nieskończoną pętlą zapytań
+        config = {"recursion_limit": 20}
         result = langgraph_agent.invoke(inputs, config=config)
         
-        # Wyciągamy ostatnią, ostateczną odpowiedź wygenerowaną przez Agenta
         final_message = result["messages"][-1]
+        raw_content = final_message.content
         
-        if hasattr(final_message, "content") and final_message.content:
-            # Strumieniujemy odpowiedź słowo po słowie
-            for word in final_message.content.split(" "):
+        # NAPRAWIONE: Jeśli content jest listą bloków, scalamy go bezpiecznie w ciąg tekstowy (str)
+        if isinstance(raw_content, list):
+            clean_text = ""
+            for block in raw_content:
+                if isinstance(block, dict) and "text" in block:
+                    clean_text += block["text"] + " "
+                elif hasattr(block, "text"):
+                    clean_text += block.text + " "
+                else:
+                    clean_text += str(block) + " "
+            final_text = clean_text.strip()
+        else:
+            final_text = str(raw_content).strip()
+            
+        if final_text:
+            for word in final_text.split(" "):
                 yield word + " "
         else:
-            yield "Agent finished processing but returned no text content."
+            yield "Agent processing complete, but response content was empty."
             
     except Exception as e:
         yield f"\n[LangGraph Execution Error: {str(e)}]"
