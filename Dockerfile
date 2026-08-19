@@ -13,8 +13,8 @@ COPY main.py .
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
 
-# 6. INSTALACJA: Pełen stos technologiczny
-RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph
+# 6. POPRAWKA: Zmiana 'jwt' na 'PyJWT' oraz dodanie 'email-validator'
+RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph passlib[bcrypt] PyJWT email-validator
 
 # 7. Skrypt startowy uruchamiający procesy po kolei
 RUN echo '#!/bin/bash\n\
