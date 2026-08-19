@@ -208,9 +208,9 @@ async def lifespan(app: FastAPI):
 # --- 9. FASTAPI FRAMEWORK INITIALIZATION & SCHEMAS ---
 app = FastAPI(
     title="🏢 Secure Cloud-Native Agentic Stack (Production Backend)", 
-    version="5.4.0", 
+    version="5.5.0", 
     redirect_slashes=True,
-    lifespan=lifespan, # Rejestracja bezpiecznego startu bazy danych
+    lifespan=lifespan,
     description=(
         "### Welcome to the Production Enterprise RAG Backend API!\n"
         "This panel serves as the secure management layer for company documents and cognitive agents.\n\n"
@@ -241,13 +241,10 @@ def split_text(text_content: str, chunk_size: int = 400, overlap: int = 50):
         start += chunk_size - overlap
     return [c.strip() for c in chunks if c.strip()]
 
-# --- 10. ENDPOINTS: AUTHENTICATION SYSTEM ---
+# --- 10. ENDPOINTS: AUTHENTICATION SYSTEM (NAPRAWIONE) ---
 @app.post("/auth/register", tags=["1. Authentication Management"], summary="Register a brand new corporate user account")
 async def register_user(user_data: UserAuthSchema):
-    """
-    **Registers a new user account inside the persistent cloud infrastructure.**
-    *   **Password Encryption:** Automatically executes a strong `bcrypt` salt-hash computation.
-    """
+    """**Registers a new user account inside the persistent cloud infrastructure.**"""
     session = SessionLocal()
     try:
         existing_user = session.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_data.email}).fetchone()
@@ -271,14 +268,12 @@ async def register_user(user_data: UserAuthSchema):
 
 @app.post("/auth/login", tags=["1. Authentication Management"], summary="Log in to get a secure bearer JWT token")
 async def login_user(user_data: UserAuthSchema):
-    """
-    **Verifies credentials and issues a unique cryptographically signed JSON Web Token (JWT).**
-    *   **Expiration lifespan:** Token automatically invalidates after exactly 60 minutes.
-    *   **Usage:** Copy the resulting token, click the top-right 'Authorize' button, and paste it to unlock secure endpoints.
-    """
+    """**Verifies credentials and issues a unique cryptographically signed JSON Web Token (JWT).**"""
     session = SessionLocal()
     try:
         user = session.execute(text("SELECT id, password FROM users WHERE email = :email"), {"email": user_data.email}).fetchone()
+        
+        # NAPRAWIONE: Wyciągamy surowe ID oraz zahashowane hasło (indeks 1) z krotki bazy danych
         if not user or not verify_password(user_data.password, user[1]):
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
@@ -290,11 +285,7 @@ async def login_user(user_data: UserAuthSchema):
 # --- 11. ENDPOINTS: CHAT SESSIONS MANAGEMENT ---
 @app.post("/chat/sessions", tags=["2. Session & History Control"], summary="Initialize a new isolated chat session room")
 async def create_chat_session(current_user_id: str = Depends(get_current_user_id)):
-    """
-    **Creates a separate historical session ID for the logged-in user context.**
-    *   **Admin Traceability:** This ID is tracked by the administration schema to isolate chat history between different logs.
-    *   **Requirement:** Save the returned `session_id` and pass it inside the body parameters of the chat endpoint.
-    """
+    """**Creates a separate historical session ID for the logged-in user context.**"""
     session = SessionLocal()
     try:
         result = session.execute(
@@ -302,8 +293,8 @@ async def create_chat_session(current_user_id: str = Depends(get_current_user_id
             {"user_id": int(current_user_id)}
         )
         session.commit()
-        new_session_id = result.fetchone()[0]
-        return {"status": "success", "session_id": new_session_id, "message": "New chat session initiated successfully."}
+        new_session_id = result.fetchone()
+        return {"status": "success", "session_id": new_session_id[0], "message": "New chat session initiated successfully."}
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=f"Session generation database error: {str(e)}")
@@ -313,12 +304,7 @@ async def create_chat_session(current_user_id: str = Depends(get_current_user_id
 # --- 12. ENDPOINTS: SECURE PDF UPLOAD ---
 @app.post("/upload-pdf", tags=["3. Knowledge Base Ingestion"], summary="Upload and vectorize a private corporate PDF document")
 async def upload_pdf(file: UploadFile = File(...), current_user_id: str = Depends(get_current_user_id)):
-    """
-    **Uploads a local binary PDF file, segments it, and pushes embedded matrices into pgvector.**
-    *   **Authentication Required:** Requires a valid active Bearer JWT token header.
-    *   **Data Partitioning:** Elements are strictly stamped with the active `user_id`, guaranteeing cross-tenant data protection.
-    *   **Processing cost:** Completely local matrix execution via internal Ollama (0$ operational cost).
-    """
+    """**Uploads a local binary PDF file, segments it, and pushes embedded matrices into pgvector.**"""
     try:
         pdf_bytes = await file.read()
         pdf_stream = io.BytesIO(pdf_bytes)
@@ -369,13 +355,11 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
     try:
         session = SessionLocal()
         
-        # 1. HISTORIA: Pobieramy dotychczasowe wiadomości z tej sesji, aby model miał pamięć długotrwałą
         past_messages_db = session.execute(
             text("SELECT role, content FROM chat_messages WHERE session_id = :session_id ORDER BY id ASC;"),
             {"session_id": session_id}
         ).fetchall()
         
-        # Przetwarzamy historię z bazy danych na obiekty zrozumiałe dla LangGraph
         history = []
         for msg in past_messages_db:
             if msg[0] == "user":
@@ -383,7 +367,6 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
             else:
                 history.append(AIMessage(content=msg[1]))
                 
-        # 2. ZAPIS: Zapisujemy bieżące pytanie użytkownika do bazy danych
         session.execute(
             text("INSERT INTO chat_messages (session_id, role, content) VALUES (:session_id, 'user', :content);"),
             {"session_id": session_id, "content": prompt}
@@ -391,7 +374,6 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
         session.commit()
         session.close()
 
-        # Budujemy stan wejściowy dla LangGraph łącząc historię z nowym pytaniem
         inputs = {
             "messages": history + [HumanMessage(content=prompt)],
             "user_id": user_id,
@@ -420,9 +402,8 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
             final_text = clean_text.strip()
         else:
             final_text = str(raw_content).strip()
-            
+
         if final_text:
-            # 3. ZAPIS ODPOWIEDZI: Zapisujemy ostateczną odpowiedź wygenerowaną przez bota do bazy danych
             session = SessionLocal()
             session.execute(
                 text("INSERT INTO chat_messages (session_id, role, content) VALUES (:session_id, 'assistant', :content);"),
@@ -435,23 +416,21 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
                 yield word + " "
         else:
             yield "Response block processed cleanly but content was evaluated as empty."
-            
+
     except Exception as e:
         yield f"\n[Secure LangGraph Execution Error: {str(e)}]"
 
+
 @app.post("/chat-with-model", tags=["4. Cognitive Agent Chat"], summary="Stream chat requests through automated LangGraph loop")
 async def chat_with_model(request_data: ChatRequest, current_user_id: str = Depends(get_current_user_id)):
-    """
-    **Executes a high-cognition multi-step Agentic RAG loop using LangGraph and Gemini 3.6 Flash.**
-    
-    *   **Historical Continuity:** Automatically recovers past chat interaction lines for the given `session_id`.
-    *   **Automated Verification:** Pushes generated payloads through a local output Guardrail block before transmission.
-    *   **Response format:** Streamed token burst sequence (HTTP 200 OK Text Stream).
-    """
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY in Render environment.")
-        
+
     return StreamingResponse(
-        agent_stream_generator(prompt=request_data.prompt, session_id=request_data.session_id, user_id=current_user_id),
+        agent_stream_generator(
+            prompt=request_data.prompt,
+            session_id=request_data.session_id,
+            user_id=current_user_id
+        ),
         media_type="text/plain; charset=utf-8"
     )
