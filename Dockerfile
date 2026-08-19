@@ -1,8 +1,16 @@
 # 1. Budujemy na oficjalnym obrazie Ollamy
 FROM ollama/ollama:latest
 
-# 2. Instalujemy Pythona i niezbędne narzędzia systemowe
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv curl && rm -rf /var/lib/apt/lists/*
+# 2. POPRAWKA: Instalujemy Pythona ORAZ kompilatory systemowe niezbędne do instalacji bcrypt
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    build-essential \
+    python3-dev \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # 3. Ustawiamy katalog roboczy dla aplikacji FastAPI
 WORKDIR /app
@@ -13,8 +21,8 @@ COPY main.py .
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
 
-# 6. POPRAWKA: Zmiana 'jwt' na 'PyJWT' oraz dodanie 'email-validator'
-RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph passlib[bcrypt] PyJWT email-validator
+# 6. INSTALACJA: Środowisko z pełnym zestawem bibliotek
+RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph bcrypt PyJWT email-validator
 
 # 7. Skrypt startowy uruchamiający procesy po kolei
 RUN echo '#!/bin/bash\n\
