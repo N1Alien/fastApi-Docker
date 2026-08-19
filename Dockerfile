@@ -13,13 +13,13 @@ COPY main.py .
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
 
-# 6. INSTALACJA: Dodano langchain-google-genai oraz langgraph do instalatora
+# 6. INSTALACJA: Pełen stos technologiczny
 RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph
 
 # 7. Skrypt startowy uruchamiający procesy po kolei
 RUN echo '#!/bin/bash\n\
 ollama serve &\n\
-sleep 8\n\
+sleep 15\n\
 \n\
 echo "Downloading embedding model..."\n\
 ollama pull nomic-embed-text\n\
