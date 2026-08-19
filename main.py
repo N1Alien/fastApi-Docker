@@ -218,7 +218,7 @@ async def lifespan(app: FastAPI):
 # --- 9. FASTAPI FRAMEWORK INITIALIZATION & SCHEMAS ---
 app = FastAPI(
     title="🏢 Secure Cloud-Native Agentic Stack (Production Backend)", 
-    version="5.7.0", 
+    version="5.8.0", 
     redirect_slashes=True,
     lifespan=lifespan,
     description=(
@@ -251,7 +251,7 @@ def split_text(text_content: str, chunk_size: int = 400, overlap: int = 50):
         start += chunk_size - overlap
     return [c.strip() for c in chunks if c.strip()]
 
-# --- 10. ENDPOINTS: AUTHENTICATION SYSTEM (100% POPRAWIONE) ---
+# --- 10. ENDPOINTS: AUTHENTICATION SYSTEM (ROZWIĄZANE) ---
 @app.post("/auth/register", tags=["1. Authentication Management"], summary="Register a brand new corporate user account")
 async def register_user(user_data: UserAuthSchema):
     """**Registers a new user account inside the persistent cloud infrastructure.**"""
@@ -285,17 +285,17 @@ async def login_user(user_data: UserAuthSchema):
     """**Verifies credentials and issues a unique cryptographically signed JSON Web Token (JWT).**"""
     session = SessionLocal()
     try:
-        # Pobieramy jawnie id oraz password jako nazwane kolumny
+        # Pobieramy jawnie wiersz użytkownika z bazy danych
         user = session.execute(
             text("SELECT id, password FROM users WHERE email = :email"), 
             {"email": user_data.email}
         ).fetchone()
         
-        # POPRAWKA: Prawidłowo przekazujemy tekstowy hash z bazy (indeks 1 lub klucz password) do weryfikacji
+        # POPRAWKA: Prawidłowo wyciągamy indeks 1 (password) i weryfikujemy czystym bcryptem
         if not user or not verify_password(user_data.password, user[1]):
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-        # POPRAWKA: Wyciągamy czystą liczbę ID (indeks 0), zamieniamy na string i pakujemy do JWT
+        # POPRAWKA GŁÓWNA: user[0] wyciąga samą czystą cyfrę ID (np. 1), bez nawiasów i przecinków
         clean_user_id = str(user[0])
         token = create_access_token(user_id=clean_user_id)
         return {"access_token": token, "token_type": "bearer"}
@@ -308,13 +308,17 @@ async def create_chat_session(current_user_id: str = Depends(get_current_user_id
     """**Creates a separate historical session ID for the logged-in user context.**"""
     session = SessionLocal()
     try:
+        # Rzutujemy zweryfikowany token bezpośrednio na czysty int do relacji SQL
         result = session.execute(
             text("INSERT INTO chat_sessions (user_id) VALUES (:user_id) RETURNING id;"),
             {"user_id": int(current_user_id)}
         )
         session.commit()
         new_session_id = result.fetchone()
-        return {"status": "success", "session_id": new_session_id[0], "message": "New chat session initiated successfully."}
+        
+        # Wyciągamy samą cyfrę numeru sesji (indeks 0 krotki)
+        clean_session_id = new_session_id[0] if new_session_id else None
+        return {"status": "success", "session_id": clean_session_id, "message": "New chat session initiated successfully."}
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=f"Session generation database error: {str(e)}")
@@ -382,6 +386,7 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
         
         history = []
         for msg in past_messages_db:
+            # Wyciągamy jawnie kolumny z krotki bazy danych (indeks 0 to rola, indeks 1 to treść)
             if msg[0] == "user":
                 history.append(HumanMessage(content=msg[1]))
             else:
@@ -406,10 +411,10 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
         if not result.get("is_safe", True):
             yield "[SECURITY ALERT: System blocked the response due to a potential security breach attempt.]"
             return
-            
+
         final_message = result["messages"][-1]
         raw_content = final_message.content
-        
+
         if isinstance(raw_content, list):
             clean_text = ""
             for block in raw_content:
@@ -436,6 +441,7 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
                 yield word + " "
         else:
             yield "Response block processed cleanly but content was evaluated as empty."
+
     except Exception as e:
         yield f"\n[Secure LangGraph Execution Error: {str(e)}]"
 
@@ -449,7 +455,7 @@ async def chat_with_model(request_data: ChatRequest, current_user_id: str = Depe
         agent_stream_generator(
             prompt=request_data.prompt,
             session_id=request_data.session_id,
-            user_id=current_user_id,
+            user_id=current_user_id
         ),
         media_type="text/plain; charset=utf-8"
     )
