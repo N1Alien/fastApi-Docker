@@ -9,16 +9,18 @@ from services.auth_service import get_current_user_id
 from services.agent_service import langgraph_agent
 from langchain_core.messages import HumanMessage, AIMessage
 
-router = APIRouter(tags=["2. Session & History Control", "4. Cognitive Agent Chat"])
+# USUNIĘTO GLOBALNE TAGI Z ROUTERA
+router = APIRouter()
 
-@router.post("/chat/sessions", response_model=SessionResponseSchema, summary="Initialize a new isolated chat session room")
+# TAG PRZYPISANY INDYWIDUALNIE DO SESJI
+@router.post("/chat/sessions", response_model=SessionResponseSchema, tags=["2. Session & History Control"], summary="Initialize a new isolated chat session room")
 async def create_chat_session(current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     """Creates a separate historical session ID for the logged-in user context."""
     try:
         result = db.execute(text("INSERT INTO chat_sessions (user_id) VALUES (:user_id) RETURNING id;"), {"user_id": int(current_user_id)})
         db.commit()
         new_session_id = result.fetchone()
-        return {"status": "success", "session_id": new_session_id[0], "message": "New chat session initiated successfully."}
+        return {"status": "success", "session_id": new_session_id, "message": "New chat session initiated successfully."}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Session generation database error: {str(e)}")
@@ -63,7 +65,8 @@ async def agent_stream_generator(prompt: str, session_id: int, user_id: str):
     except Exception as e:
         yield f"\n[Secure LangGraph Execution Error: {str(e)}]"
 
-@router.post("/chat-with-model", summary="Stream chat requests through automated LangGraph loop")
+# TAG PRZYPISANY INDYWIDUALNIE DO CZATU AGENTA
+@router.post("/chat-with-model", tags=["4. Cognitive Agent Chat"], summary="Stream chat requests through automated LangGraph loop")
 async def chat_with_model(request_data: ChatRequestSchema, current_user_id: str = Depends(get_current_user_id)):
     """Executes a high-cognition multi-step Agentic RAG loop using LangGraph and Gemini 3.6 Flash."""
     return StreamingResponse(agent_stream_generator(prompt=request_data.prompt, session_id=request_data.session_id, user_id=current_user_id), media_type="text/plain; charset=utf-8")
