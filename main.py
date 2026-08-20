@@ -1,13 +1,10 @@
-# Plik: main.py (PRODUCTION ENTRYPOINT)
+import os
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from database import SessionLocal
-
-# Importujemy routery z warstwy routers/
 from routers import auth_router, pdf_router, chat_router
 
-# --- 1. LIFESPAN DATABASE INITIALIZER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Bezpieczne podnoszenie tabel i kluczy obcych CASCADE na starcie kontenera."""
@@ -45,7 +42,6 @@ async def lifespan(app: FastAPI):
         session.close()
     yield
 
-# --- 2. FASTAPI SYSTEM INITIALIZATION ---
 app = FastAPI(
     title="🏢 Layered Production Secure Agentic Stack", 
     version="6.0.0", 
@@ -58,7 +54,7 @@ app = FastAPI(
     )
 )
 
-# --- 3. INCLUDE ROUTERS (Wstrzykiwanie odseparowanych modułów) ---
+# Wstrzykiwanie odseparowanych modułów
 app.include_router(auth_router.router)
 app.include_router(pdf_router.router)
 app.include_router(chat_router.router)

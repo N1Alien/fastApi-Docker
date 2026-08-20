@@ -1,6 +1,5 @@
-# Folder: models/ | Plik: tables.py
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 import datetime
 
 Base = declarative_base()
@@ -21,7 +20,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String, nullable=False) # 'user' or 'assistant'
+    role = Column(String, nullable=False)
     content = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -30,5 +29,3 @@ class OllamaDocument(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, nullable=False, index=True)
     content = Column(String, nullable=False)
-    # Kolumnę 'embedding vector(768)' zostawiamy surowemu SQL w lifespan, 
-    # ponieważ standardowe SQLAlchemy bez rozszerzeń nie zna typu 'vector'.

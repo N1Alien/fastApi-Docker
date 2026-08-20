@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y \
 # 3. Ustawiamy katalog roboczy dla aplikacji FastAPI
 WORKDIR /app
 
-# 4. Kopiujemy plik main.py
-COPY main.py .
+# 4. POPRAWKA: Kopiujemy całą strukturę projektową (foldery i pliki), a nie tylko main.py
+COPY . .
 
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
@@ -24,7 +24,7 @@ RUN python3 -m venv /app/venv
 # 6. Instalacja środowiska z pełnym zestawem bibliotek
 RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph bcrypt PyJWT email-validator
 
-# 7. POPRAWKA PRODUKCYJNA: Zmuszamy Ollamę do ukrycia się na 127.0.0.1, aby nie kradła publicznego portu Rendera
+# 7. Skrypt startowy wymuszający izolację portów
 RUN echo '#!/bin/bash\n\
 export OLLAMA_HOST="127.0.0.1:11434"\n\
 ollama serve &\n\
@@ -40,9 +40,6 @@ echo "Starting FastAPI app on port $APP_PORT..."\n\
 
 RUN chmod +x /app/start.sh
 
-# Wygląd zewnętrzny portu (FastAPI jako jedyne wyjście)
 EXPOSE 10000
-
 ENTRYPOINT []
-
 CMD ["/bin/bash", "/app/start.sh"]
