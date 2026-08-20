@@ -1,10 +1,6 @@
 fastapi
 uvicorn
-pydantic
-psycopg2-binary
 sqlalchemy
-pgvector
-numpy
-google-genai
+psycopg2-binary
 pypdf
-python-multipart
+ollama
