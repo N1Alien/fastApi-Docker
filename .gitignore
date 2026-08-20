@@ -1,0 +1,15 @@
+# Ignoruj pliki tymczasowe i pamięć podręczną Pythona
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Ignoruj lokalne pliki środowiska wirtualnego (jeśli masz je w tym folderze)
+venv/
+.venv/
+env/
+
+# Ignoruj lokalne pliki konfiguracyjne systemów operacyjnych
+.DS_Store
+Thumbs.db
