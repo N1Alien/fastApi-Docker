@@ -15,14 +15,14 @@ RUN apt-get update && apt-get install -y \
 # 3. Ustawiamy katalog roboczy dla aplikacji FastAPI
 WORKDIR /app
 
-# 4. POPRAWKA: Kopiujemy całą strukturę projektową (foldery i pliki), a nie tylko main.py
+# 4. Kopiujemy całą strukturę projektową
 COPY . .
 
 # 5. Tworzymy środowisko wirtualne Pythona
 RUN python3 -m venv /app/venv
 
-# 6. Instalacja środowiska z pełnym zestawem bibliotek
-RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph bcrypt PyJWT email-validator
+# 6. INSTALACJA: Dodano bibliotekę tavily-python
+RUN /app/venv/bin/pip install --no-cache-dir fastapi uvicorn pydantic psycopg2-binary sqlalchemy pgvector numpy pypdf python-multipart ollama google-genai langchain-google-genai langgraph bcrypt PyJWT email-validator tavily-python
 
 # 7. Skrypt startowy wymuszający izolację portów
 RUN echo '#!/bin/bash\n\
