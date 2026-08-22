@@ -1,7 +1,7 @@
 // Folder: src/components/ | Plik: Auth.jsx | ZAKTUALIZOWANA CZĘŚĆ 1 Z 2
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../config';
-import { Lock, Mail, ShieldAlert, Cpu, Terminal, RefreshCw, HelpCircle, GitHub } from 'lucide-react'; // POPRAWIONE NA Github
+import { Lock, Mail, ShieldAlert, Cpu, Terminal, RefreshCw, HelpCircle} from 'lucide-react'; // POPRAWIONE NA Github
 
 export default function Auth({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -95,18 +95,18 @@ export default function Auth({ onAuthSuccess }) {
             </ol>
           </div>
 
-          {/* GitHub Source Code Portal Link */}
-          <div className="mt-8 pt-4 border-t border-gray-900">
-            <a 
-              href="https://github.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-xs font-black text-[#00f0ff] hover:text-white uppercase tracking-widest transition duration-150 group"
-            >
-              <GitHub className="h-4 w-4 text-[#00f0ff] group-hover:scale-110 transition-transform" /> {/* POPRAWIONE NA Github */}
-              <span>&gt;&gt; ACCESS REPO_MAINFRAME_SOURCE</span>
-            </a>
-          </div>
+          // KROK 2: Podmień cały blok linku na tę czytelną, tekstową wersję cyberpunkową:
+<div className="mt-8 pt-4 border-t border-gray-900">
+  <a 
+    href="https://github.com/N1Alien/fastApi-Docker" 
+    target="_blank" 
+    rel="noopener noreferrer"
+    className="inline-flex items-center gap-2 text-xs font-black text-[#00f0ff] hover:text-white uppercase tracking-widest transition duration-150"
+  >
+    <span>&gt;&gt; [ ACCESS REPO MAINFRAME SOURCE CODE ]</span>
+  </a>
+</div>
+
         </div>
 
 // Folder: src/components/ | Plik: Auth.jsx | CZĘŚĆ 2 Z 2
