@@ -1,6 +1,6 @@
-# Plik: main.py (Zaktualizowana sekcja startowa z CORS)
+# Plik: main.py (ENTRYPOINT Z PEŁNYM ZABEZPIECZENIEM CORS)
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware  # DODANY IMPORT
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from database import SessionLocal
@@ -54,17 +54,15 @@ app = FastAPI(
     )
 )
 
-# --- POPRAWKA PRODUKCYJNA: WŁĄCZENIE CORSMIDDLEWARE ---
-# Zezwala Twojej lokalnej aplikacji React na porcie 5174/5173 na bezpieczną rozmowę z chmurą
+# WŁĄCZENIE CORSMIDDLEWARE DLA REACTION PANELU v4
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Zezwól na ruch ze wszystkich lokalizacji deweloperskich
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Zezwól na wszystkie metody HTTP (GET, POST, OPTIONS)
-    allow_headers=["*"],  # Zezwól na przesyłanie nagłówków autoryzacji Bearer JWT
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Include Router Linkages
 app.include_router(auth_router.router)
 app.include_router(pdf_router.router)
 app.include_router(chat_router.router)
