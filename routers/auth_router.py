@@ -10,7 +10,6 @@ router = APIRouter(prefix="/auth", tags=["1. Authentication Management"])
 
 @router.post("/register", summary="Register a brand new corporate user account")
 async def register_user(user_data: UserAuthSchema, db: Session = Depends(get_db)):
-    """**Registers a new user account inside the persistent cloud infrastructure.**"""
     try:
         existing_user = db.execute(
             text("SELECT id FROM users WHERE email = :email"), 
@@ -35,14 +34,20 @@ async def register_user(user_data: UserAuthSchema, db: Session = Depends(get_db)
 
 @router.post("/login", response_model=TokenSchema, summary="Log in to get a secure bearer JWT token")
 async def login_user(user_data: UserAuthSchema, db: Session = Depends(get_db)):
-    """**Verifies credentials and issues a unique cryptographically signed JSON Web Token (JWT).**"""
-    user = db.execute(
-        text("SELECT id, password FROM users WHERE email = :email"), 
-        {"email": user_data.email}
-    ).fetchone()
-    
-    if not user or not verify_password(user_data.password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    try:
+        user = db.execute(
+            text("SELECT id, password FROM users WHERE email = :email"), 
+            {"email": user_data.email}
+        ).fetchone()
+        
+        # POPRAWKA GŁÓWNA: user to krotka (tuple). 
+        # user[0] to id, user[1] to zahashowane hasło.
+        if not user or not verify_password(user_data.password, user[1]):
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    token = create_access_token(user_id=str(user.id))
-    return {"access_token": token, "token_type": "bearer"}
+        token = create_access_token(user_id=str(user[0]))
+        return {"access_token": token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login process runtime error: {str(e)}")
