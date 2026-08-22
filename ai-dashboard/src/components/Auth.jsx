@@ -1,7 +1,7 @@
-// Folder: src/components/ | Plik: Auth.jsx | CZĘŚĆ 1 Z 2
+// Folder: src/components/ | Plik: Auth.jsx | ZAKTUALIZOWANA CZĘŚĆ 1 Z 2
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../config';
-import { Lock, Mail, ShieldAlert, Cpu, Terminal, RefreshCw, HelpCircle, Github } from 'lucide-react';
+import { Lock, Mail, ShieldAlert, Cpu, Terminal, RefreshCw, HelpCircle, Github } from 'lucide-react'; // POPRAWIONE NA Github
 
 export default function Auth({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -103,11 +103,12 @@ export default function Auth({ onAuthSuccess }) {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-xs font-black text-[#00f0ff] hover:text-white uppercase tracking-widest transition duration-150 group"
             >
-              <Github className="h-4 w-4 text-[#00f0ff] group-hover:scale-110 transition-transform" />
+              <Github className="h-4 w-4 text-[#00f0ff] group-hover:scale-110 transition-transform" /> {/* POPRAWIONE NA Github */}
               <span>&gt;&gt; ACCESS REPO_MAINFRAME_SOURCE</span>
             </a>
           </div>
         </div>
+
 // Folder: src/components/ | Plik: Auth.jsx | CZĘŚĆ 2 Z 2
 
         {/* RIGHT COLUMN: MAINFRAME AUTH CONSOLE */}
