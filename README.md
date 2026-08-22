@@ -1,4 +1,12 @@
-# ☁️ Secure Cloud-Native Agentic RAG Stack with FastAPI, LangGraph, and PostgreSQL
+#  LIVE RUNTIME PRODUCTION LINK
+ **[https://cyber-netrunner-dashboard.onrender.com](https://cyber-netrunner-dashboard.onrender.com)**
+
+###  IMPORTANT PROTOCOL: HYPERSLEEP ACTIVATED (COLD START)
+> **If this is your first connection in the last 15 minutes, the free-tier cloud mainframe is currently dormant. Upon clicking the link or attempting to log in, Render will automatically initialize a Cold Start boot sequence to spin up the FastAPI and Ollama servers. This process can take up to 2-3 minutes. Please remain connected and do not terminate the breach thread.** [1.11]
+
+---
+
+#  Secure Cloud-Native Agentic RAG Stack with FastAPI, LangGraph, and PostgreSQL
 ###  Production-Grade Corporate Documentation Assistant with Multi-Layer Security
 
 ---
@@ -15,7 +23,7 @@ Equipped with an **autonomous cognitive brain**, the assistant doesn't just read
 
 This system is built from the ground up to be **entirely decoupled from local physical hardware**. It requires **ZERO** local dependencies, local database clusters, local Python environments, or local background background processes to execute. 
 
-### 🌍 Cloud Independence Framework:
+###  Cloud Independence Framework:
 *   **Zero-Hardware Footprint:** You can completely turn off your local machine, and the entire agentic loop remains globally available, online, and accessible via automated cloud network endpoints with integrated SSL certificates.
 *   **Cloud-to-Cloud Pipeline:** Document upload, segment chunking, vector calculation, multi-step orchestration, database commits, and public token streaming are processed entirely through synchronized, serverless chmura handshakes.
 
