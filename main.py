@@ -1,13 +1,11 @@
-# Plik: main.py (PRODUCTION ENTRYPOINT)
+# Plik: main.py (Zaktualizowana sekcja startowa z CORS)
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware  # DODANY IMPORT
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from database import SessionLocal
-
-# Importujemy routery z warstwy routers/
 from routers import auth_router, pdf_router, chat_router
 
-# --- 1. LIFESPAN DATABASE INITIALIZER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Bezpieczne podnoszenie tabel i kluczy obcych CASCADE na starcie kontenera."""
@@ -45,25 +43,28 @@ async def lifespan(app: FastAPI):
         session.close()
     yield
 
-# --- 2. FASTAPI SYSTEM INITIALIZATION (PRZYWRÓCONA INSTRUKCJA) ---
 app = FastAPI(
     title="🏢 Secure Cloud-Native Agentic Stack (Production Backend)", 
-    version="6.1.0", 
+    version="6.2.0", 
     redirect_slashes=True,
     lifespan=lifespan,
     description=(
         "### Welcome to the Production Enterprise RAG Backend API!\n"
-        "This panel serves as the secure management layer for company documents and cognitive agents.\n\n"
-        "**🚀 PRO-TIP FOR TESTING:**\n"
-        "1. Create an account in the **Authentication** section (`/auth/register`).\n"
-        "2. Login (`/auth/login`) to receive your unique **JWT Token**.\n"
-        "3. Click the **Authorize (lock icon)** button on top of this page, paste the token, and click Authorize.\n"
-        "4. Initialize a chat room in the **Session Management** section (`/chat/sessions`) to get a `session_id`.\n"
-        "5. Upload documents and stream chat queries safely inside your personal partition!"
+        "This panel serves as the secure management layer for company documents and cognitive agents."
     )
 )
 
-# --- 3. INCLUDE ROUTERS ---
+# --- POPRAWKA PRODUKCYJNA: WŁĄCZENIE CORSMIDDLEWARE ---
+# Zezwala Twojej lokalnej aplikacji React na porcie 5174/5173 na bezpieczną rozmowę z chmurą
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Zezwól na ruch ze wszystkich lokalizacji deweloperskich
+    allow_credentials=True,
+    allow_methods=["*"],  # Zezwól na wszystkie metody HTTP (GET, POST, OPTIONS)
+    allow_headers=["*"],  # Zezwól na przesyłanie nagłówków autoryzacji Bearer JWT
+)
+
+# Include Router Linkages
 app.include_router(auth_router.router)
 app.include_router(pdf_router.router)
 app.include_router(chat_router.router)
