@@ -1,6 +1,6 @@
 // Folder: ai-dashboard/src/components/ | Plik: Auth.jsx | CZĘŚĆ 1 Z 2
 import React, { useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiUrl } from '../config';
 import { Lock, Mail, ShieldAlert, Cpu, Terminal, RefreshCw } from 'lucide-react';
 
 export default function Auth({ onAuthSuccess }) {
@@ -20,7 +20,7 @@ export default function Auth({ onAuthSuccess }) {
     const endpoint = isLogin ? '/auth/login' : '/auth/register';
     
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })

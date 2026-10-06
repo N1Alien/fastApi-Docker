@@ -1,6 +1,6 @@
 // Plik: src/components/ChatInterface.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiUrl } from '../config';
 import { Terminal, Send, Wifi } from 'lucide-react';
 
 export default function ChatInterface() {
@@ -14,7 +14,7 @@ export default function ChatInterface() {
     const initSession = async () => {
       const token = localStorage.getItem('token');
       try {
-        const response = await fetch(`${API_BASE_URL}/chat/sessions`, {
+        const response = await fetch(apiUrl('/chat/sessions'), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -51,7 +51,7 @@ export default function ChatInterface() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/chat-with-model`, {
+      const response = await fetch(apiUrl('/chat-with-model'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

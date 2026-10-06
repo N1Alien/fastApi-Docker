@@ -1,6 +1,12 @@
 #  LIVE RUNTIME PRODUCTION LINK
  **[https://cyber-netrunner-dashboard.onrender.com](https://cyber-netrunner-dashboard.onrender.com)**
 
+## Frontend / API address on Render
+
+The dashboard frontend and FastAPI backend are separate Render services. The current backend URL is `https://fastapi-docker-i29z.onrender.com`. The frontend uses this as its production default; `VITE_API_URL` can override it. Redeploy the frontend after changing its API URL because Vite embeds the value during its build. The backend's `CORS_ORIGINS` can be a comma-separated list of allowed frontend origins; by default it allows this dashboard and local Vite development.
+
+For local frontend development, copy `ai-dashboard/.env.example` to `ai-dashboard/.env.local` and set `VITE_API_URL=http://localhost:10000`.
+
 ###  IMPORTANT PROTOCOL: HYPERSLEEP ACTIVATED (COLD START)
 > **If this is your first connection in the last 15 minutes, the free-tier cloud mainframe is currently dormant. Upon clicking the link or attempting to log in, Render will automatically initialize a Cold Start boot sequence to spin up the FastAPI and Ollama servers. This process can take up to 2-3 minutes. Please remain connected and do not terminate the breach thread.** [1.11]
 
@@ -199,4 +205,3 @@ Execute the asynchronous server thread with hot-reloading active for real-time d
 uvicorn main:app --host 0.0.0.0 --port 10000 --reload
 ```
 Open **`http://localhost:10000/docs`** in your browser to access the complete interactive interface panel!
-

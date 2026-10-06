@@ -1,6 +1,6 @@
 // Plik: src/components/SidebarFiles.jsx
 import React, { useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiUrl } from '../config';
 import { Upload, FileText, CheckCircle2, AlertTriangle, Cpu, HelpCircle } from 'lucide-react';
 
 export default function SidebarFiles() {
@@ -26,7 +26,7 @@ export default function SidebarFiles() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/upload-pdf`, {
+      const response = await fetch(apiUrl('/upload-pdf'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

@@ -1,4 +1,6 @@
 # Plik: main.py (ENTRYPOINT Z PEŁNYM ZABEZPIECZENIEM CORS)
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -54,10 +56,18 @@ app = FastAPI(
     )
 )
 
-# WŁĄCZENIE CORSMIDDLEWARE DLA REACTION PANELU v4
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "https://cyber-netrunner-dashboard.onrender.com,http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
